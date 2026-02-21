@@ -39,8 +39,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
-                .requestMatchers("/", "/index.html", "/*.js", "/*.css", "/*.ico", "/assets/**").permitAll()
-                .anyRequest().authenticated()
+                // Protect only API endpoints — Angular app handles its own route guards
+                .requestMatchers("/api/**").authenticated()
+                .anyRequest().permitAll()
             )
             .headers(headers -> headers.frameOptions(f -> f.disable()))  // H2 console uses iframes
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

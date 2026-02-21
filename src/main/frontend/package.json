@@ -4,8 +4,8 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --proxy-config proxy.conf.json",
-    "build": "ng build --output-path ../resources/static --base-href /",
-    "build:prod": "ng build --configuration production --output-path ../resources/static --base-href /"
+    "build": "ng build --base-href /",
+    "build:prod": "ng build --configuration production --base-href /"
   },
   "private": true,
   "dependencies": {
