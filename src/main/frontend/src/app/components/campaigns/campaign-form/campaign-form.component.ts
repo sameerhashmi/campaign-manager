@@ -75,10 +75,10 @@ import { CampaignService } from '../../../services/campaign.service';
 
               <div class="tokens-info">
                 <strong>Available template tokens:</strong>
-                <span class="token">&#123;&#123;name&#125;&#125;</span>
-                <span class="token">&#123;&#123;role&#125;&#125;</span>
-                <span class="token">&#123;&#123;company&#125;&#125;</span>
-                <span class="token">&#123;&#123;category&#125;&#125;</span>
+                <span class="token">{{ tokenName }}</span>
+                <span class="token">{{ tokenRole }}</span>
+                <span class="token">{{ tokenCompany }}</span>
+                <span class="token">{{ tokenCategory }}</span>
               </div>
 
               <div class="form-actions">
@@ -114,6 +114,11 @@ export class CampaignFormComponent implements OnInit {
   saving = false;
   hidePassword = true;
   editId?: number;
+
+  readonly tokenName = '{{name}}';
+  readonly tokenRole = '{{role}}';
+  readonly tokenCompany = '{{company}}';
+  readonly tokenCategory = '{{category}}';
 
   constructor(
     private fb: FormBuilder,

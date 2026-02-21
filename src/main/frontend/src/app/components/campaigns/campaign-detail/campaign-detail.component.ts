@@ -111,13 +111,13 @@ import { EmailJobService } from '../../../services/email-job.service';
                         </mat-form-field>
                         <mat-form-field appearance="outline">
                           <mat-label>Subject</mat-label>
-                          <input matInput formControlName="subject" placeholder="Hi {{name}}, ...">
+                          <input matInput formControlName="subject" [placeholder]="subjectPlaceholder">
                         </mat-form-field>
                         <mat-form-field appearance="outline">
                           <mat-label>Body Template</mat-label>
                           <textarea matInput formControlName="bodyTemplate" rows="8"
-                                    placeholder="Dear {{name}},&#10;&#10;I wanted to reach out..."></textarea>
-                          <mat-hint>Use: &#123;&#123;name&#125;&#125; &#123;&#123;role&#125;&#125; &#123;&#123;company&#125;&#125; &#123;&#123;category&#125;&#125;</mat-hint>
+                                    [placeholder]="bodyPlaceholder"></textarea>
+                          <mat-hint>Use: {{ tokenName }} {{ tokenRole }} {{ tokenCompany }} {{ tokenCategory }}</mat-hint>
                         </mat-form-field>
                         <div class="form-actions">
                           <button mat-button type="button" (click)="cancelTemplateForm()">Cancel</button>
@@ -356,6 +356,14 @@ export class CampaignDetailComponent implements OnInit {
   availableContacts: Contact[] = [];
   jobs: EmailJob[] = [];
   loading = true;
+
+  // Token display strings (avoids Angular treating {{...}} as bindings)
+  readonly tokenName = '{{name}}';
+  readonly tokenRole = '{{role}}';
+  readonly tokenCompany = '{{company}}';
+  readonly tokenCategory = '{{category}}';
+  readonly subjectPlaceholder = 'Hi {{name}}, quick question...';
+  readonly bodyPlaceholder = 'Dear {{name}},\n\nI wanted to reach out regarding...';
 
   showTemplateForm = false;
   showContactPicker = false;
