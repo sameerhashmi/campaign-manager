@@ -1,0 +1,35 @@
+# Maven
+target/
+*.class
+*.jar
+*.war
+
+# H2 Database files
+data/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Angular build
+src/main/resources/static/
+src/main/frontend/node_modules/
+src/main/frontend/dist/
+src/main/frontend/.angular/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+*.env
+application-local.properties
+
+# Logs
+*.log
+logs/
+
+# Playwright browsers cache
+playwright-cache/
