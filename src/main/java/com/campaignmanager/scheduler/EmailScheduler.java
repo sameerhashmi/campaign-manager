@@ -35,16 +35,36 @@ public class EmailScheduler {
         log.info("Email scheduler: {} due job(s) found", dueJobs.size());
 
         for (EmailJob job : dueJobs) {
-            // Skip if campaign is paused
+            // Skip if campaign is paused or still in draft
             CampaignStatus campaignStatus = job.getCampaignContact().getCampaign().getStatus();
             if (campaignStatus == CampaignStatus.PAUSED || campaignStatus == CampaignStatus.DRAFT) {
-                log.debug("Skipping job {} — campaign is {}", job.getId(), campaignStatus);
+                log.debug("Skipping job id={} — campaign is {}", job.getId(), campaignStatus);
                 continue;
             }
 
+            // Enforce step ordering: step N is only sent after step N-1 has been SENT
+            // for the same contact in this campaign. This prevents multiple steps from
+            // firing at once when their scheduled times have all passed (e.g. during testing
+            // with past dates, or if the app was offline while steps became due).
+            int stepNumber = job.getStepNumber();
+            if (stepNumber > 1) {
+                boolean previousStepSent = job.getCampaignContact().getEmailJobs().stream()
+                        .anyMatch(j -> j.getStepNumber() == stepNumber - 1
+                                && j.getStatus() == EmailJobStatus.SENT);
+                if (!previousStepSent) {
+                    log.info("Deferring job id={} step={} for contact={} — step {} not yet SENT",
+                            job.getId(), stepNumber,
+                            job.getCampaignContact().getContact().getEmail(),
+                            stepNumber - 1);
+                    continue;
+                }
+            }
+
             try {
-                log.info("Sending email job id={} to={} subject='{}'",
+                log.info("Sending job id={} step={} scheduledAt={} to={} subject='{}'",
                         job.getId(),
+                        job.getStepNumber(),
+                        job.getScheduledAt(),
                         job.getCampaignContact().getContact().getEmail(),
                         job.getSubject());
 
@@ -54,7 +74,7 @@ public class EmailScheduler {
                 job.setSentAt(LocalDateTime.now());
                 job.setErrorMessage(null);
             } catch (Exception e) {
-                log.error("Failed to send email job id={}: {}", job.getId(), e.getMessage());
+                log.error("Failed to send job id={}: {}", job.getId(), e.getMessage());
                 job.setStatus(EmailJobStatus.FAILED);
                 job.setErrorMessage(e.getMessage());
             }
