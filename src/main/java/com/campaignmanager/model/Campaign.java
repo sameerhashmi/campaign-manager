@@ -25,11 +25,9 @@ public class Campaign {
 
     private String description;
 
+    /** Optional — used for display/reference only. Actual sending uses the stored Playwright session. */
     @Column(name = "gmail_email")
     private String gmailEmail;
-
-    @Column(name = "gmail_password")
-    private String gmailPassword;
 
     /**
      * Comma-separated interval days, e.g. "0,3,7,14,21,30"

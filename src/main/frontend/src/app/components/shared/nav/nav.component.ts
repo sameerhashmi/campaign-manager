@@ -38,6 +38,10 @@ import { AuthService } from '../../../services/auth.service';
             <mat-icon matListItemIcon>people</mat-icon>
             <span matListItemTitle>Contacts</span>
           </a>
+          <a mat-list-item routerLink="/settings" routerLinkActive="active-link">
+            <mat-icon matListItemIcon>settings</mat-icon>
+            <span matListItemTitle>Settings</span>
+          </a>
         </mat-nav-list>
 
         <div class="sidenav-footer">

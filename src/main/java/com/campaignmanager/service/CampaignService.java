@@ -150,9 +150,6 @@ public class CampaignService {
         campaign.setName(dto.getName());
         campaign.setDescription(dto.getDescription());
         campaign.setGmailEmail(dto.getGmailEmail());
-        if (dto.getGmailPassword() != null && !dto.getGmailPassword().isBlank()) {
-            campaign.setGmailPassword(dto.getGmailPassword());
-        }
         campaign.setIntervalDays(dto.getIntervalDays());
     }
 

@@ -16,10 +16,8 @@ public class CampaignDto {
 
     private String description;
 
-    @NotBlank
+    /** Optional — display/reference only. Sending uses the stored Playwright session. */
     private String gmailEmail;
-
-    private String gmailPassword;
 
     @NotBlank
     private String intervalDays;

@@ -38,5 +38,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/contacts/contact-list/contact-list.component').then(m => m.ContactListComponent)
   },
+  {
+    path: 'settings',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/settings/settings.component').then(m => m.SettingsComponent)
+  },
   { path: '**', redirectTo: '/dashboard' }
 ];

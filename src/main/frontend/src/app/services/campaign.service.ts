@@ -78,4 +78,18 @@ export class CampaignService {
     const params = status ? `?status=${status}` : '';
     return this.http.get<EmailJob[]>(`${this.base}/${campaignId}/jobs${params}`);
   }
+
+  // Excel import
+  importExcel(campaignId: number, file: File): Observable<ExcelImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ExcelImportResult>(`${this.base}/${campaignId}/import-excel`, formData);
+  }
+}
+
+export interface ExcelImportResult {
+  contactsImported: number;
+  templatesImported: number;
+  errors: string[];
+  message: string;
 }

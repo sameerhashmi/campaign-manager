@@ -11,11 +11,13 @@ import com.campaignmanager.service.CampaignService;
 import com.campaignmanager.service.ContactService;
 import com.campaignmanager.service.EmailJobService;
 import com.campaignmanager.service.EmailTemplateService;
+import com.campaignmanager.service.ExcelImportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,6 +33,7 @@ public class CampaignController {
     private final EmailTemplateService templateService;
     private final ContactService contactService;
     private final EmailJobService emailJobService;
+    private final ExcelImportService excelImportService;
     private final CampaignContactRepository campaignContactRepository;
     private final CampaignRepository campaignRepository;
     private final ContactRepository contactRepository;
@@ -144,6 +147,22 @@ public class CampaignController {
         campaignContactRepository.findByCampaignIdAndContactId(id, contactId)
                 .ifPresent(campaignContactRepository::delete);
         return ResponseEntity.noContent().build();
+    }
+
+    // --- Excel Import ---
+
+    @PostMapping("/{id}/import-excel")
+    public ResponseEntity<ExcelImportResultDto> importExcel(@PathVariable Long id,
+                                                            @RequestParam("file") MultipartFile file) {
+        try {
+            ExcelImportResultDto result = excelImportService.importFromExcel(id, file);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            ExcelImportResultDto error = new ExcelImportResultDto();
+            error.getErrors().add(e.getMessage());
+            error.setMessage("Import failed: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
 
     // --- Email Jobs ---
