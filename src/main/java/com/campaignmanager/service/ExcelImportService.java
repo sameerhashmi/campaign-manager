@@ -6,6 +6,7 @@ import com.campaignmanager.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +14,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Parses an Excel workbook and imports contacts + email templates for a campaign.
@@ -139,21 +143,31 @@ public class ExcelImportService {
         }
     }
 
+    private static final List<DateTimeFormatter> DT_FORMATTERS = List.of(
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("M/d/yyyy H:mm"),
+            DateTimeFormatter.ofPattern("M/d/yy H:mm")
+    );
+
     private void importTemplates(Sheet sheet, Campaign campaign, ExcelImportResultDto result) {
         Iterator<Row> rows = sheet.iterator();
         if (!rows.hasNext()) return;
 
         // Parse header row
         Row header = rows.next();
-        int stepCol = -1, subjectCol = -1, bodyCol = -1;
+        int stepCol = -1, subjectCol = -1, bodyCol = -1, scheduledAtCol = -1;
 
         for (Cell cell : header) {
             String h = cell.getStringCellValue().trim().toLowerCase()
                     .replace(" ", "_").replace("-", "_");
             switch (h) {
-                case "step_number", "step" -> stepCol    = cell.getColumnIndex();
-                case "subject"            -> subjectCol = cell.getColumnIndex();
-                case "body", "body_template" -> bodyCol = cell.getColumnIndex();
+                case "step_number", "step" -> stepCol         = cell.getColumnIndex();
+                case "subject"             -> subjectCol      = cell.getColumnIndex();
+                case "body", "body_template" -> bodyCol       = cell.getColumnIndex();
+                case "scheduled_at", "scheduled_date", "send_at", "send_date"
+                                           -> scheduledAtCol  = cell.getColumnIndex();
             }
         }
 
@@ -181,11 +195,32 @@ public class ExcelImportService {
                     }
                 }
 
+                LocalDateTime scheduledAt = null;
+                if (scheduledAtCol >= 0) {
+                    Cell dtCell = row.getCell(scheduledAtCol, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+                    if (dtCell != null) {
+                        if (dtCell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(dtCell)) {
+                            scheduledAt = dtCell.getLocalDateTimeCellValue();
+                        } else {
+                            String sv = getCellString(row, scheduledAtCol);
+                            if (sv != null && !sv.isBlank()) {
+                                scheduledAt = parseDateTime(sv);
+                                if (scheduledAt == null) {
+                                    result.getErrors().add("Template row " + rowNum +
+                                            ": could not parse scheduled_at value '" + sv +
+                                            "'. Use format: yyyy-MM-dd HH:mm");
+                                }
+                            }
+                        }
+                    }
+                }
+
                 EmailTemplate template = new EmailTemplate();
                 template.setCampaign(campaign);
                 template.setStepNumber(stepNumber);
                 template.setSubject(subject != null ? subject : "");
                 template.setBodyTemplate(body != null ? body : "");
+                template.setScheduledAt(scheduledAt);
                 templateRepository.save(template);
 
                 result.setTemplatesImported(result.getTemplatesImported() + 1);
@@ -195,6 +230,15 @@ public class ExcelImportService {
                 log.warn("Failed to import template at row {}: {}", rowNum, e.getMessage());
             }
         }
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        for (DateTimeFormatter fmt : DT_FORMATTERS) {
+            try {
+                return LocalDateTime.parse(value.trim(), fmt);
+            } catch (DateTimeParseException ignored) {}
+        }
+        return null;
     }
 
     private String getCellString(Row row, int col) {

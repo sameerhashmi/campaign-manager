@@ -32,13 +32,13 @@ public class SettingsController {
     @PostMapping("/gmail/connect")
     public ResponseEntity<GmailSessionStatusDto> connect() {
         if (sessionService.isConnecting()) {
-            return ResponseEntity.accepted().body(buildStatus());
+            return ResponseEntity.ok(buildStatus());
         }
         sessionService.startConnectSession();
         GmailSessionStatusDto dto = buildStatus();
         dto.setConnecting(true);
         dto.setMessage("Browser window opened — please log into Gmail. This page will update automatically.");
-        return ResponseEntity.accepted().body(dto);
+        return ResponseEntity.ok(dto);
     }
 
     /**

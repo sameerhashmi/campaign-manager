@@ -33,6 +33,7 @@ public class EmailTemplateService {
         template.setStepNumber(dto.getStepNumber());
         template.setSubject(dto.getSubject());
         template.setBodyTemplate(dto.getBodyTemplate());
+        template.setScheduledAt(dto.getScheduledAt());
         return toDto(templateRepository.save(template));
     }
 
@@ -43,6 +44,7 @@ public class EmailTemplateService {
         template.setStepNumber(dto.getStepNumber());
         template.setSubject(dto.getSubject());
         template.setBodyTemplate(dto.getBodyTemplate());
+        template.setScheduledAt(dto.getScheduledAt());
         return toDto(templateRepository.save(template));
     }
 
@@ -58,6 +60,7 @@ public class EmailTemplateService {
         dto.setStepNumber(t.getStepNumber());
         dto.setSubject(t.getSubject());
         dto.setBodyTemplate(t.getBodyTemplate());
+        dto.setScheduledAt(t.getScheduledAt());
         return dto;
     }
 }

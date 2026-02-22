@@ -3,8 +3,6 @@ export interface Campaign {
   name: string;
   description?: string;
   gmailEmail: string;
-  gmailPassword?: string;
-  intervalDays: string;
   status?: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
   createdAt?: string;
   launchedAt?: string;
@@ -18,4 +16,6 @@ export interface EmailTemplate {
   stepNumber: number;
   subject: string;
   bodyTemplate: string;
+  /** ISO datetime string: when this email step should be sent */
+  scheduledAt?: string;
 }

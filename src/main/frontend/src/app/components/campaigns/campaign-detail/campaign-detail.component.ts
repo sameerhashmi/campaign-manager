@@ -71,7 +71,6 @@ import { EmailJobService } from '../../../services/email-job.service';
                   <mat-card-content>
                     <div class="detail-grid">
                       <div class="detail-row"><span class="label">Gmail Account</span><span>{{ campaign.gmailEmail }}</span></div>
-                      <div class="detail-row"><span class="label">Interval Days</span><span>{{ campaign.intervalDays }}</span></div>
                       <div class="detail-row"><span class="label">Contacts</span><span>{{ campaign.contactCount }}</span></div>
                       <div class="detail-row"><span class="label">Created</span><span>{{ campaign.createdAt | date:'medium' }}</span></div>
                       @if (campaign.launchedAt) {
@@ -107,7 +106,7 @@ import { EmailJobService } from '../../../services/email-job.service';
                       <form [formGroup]="templateForm" (ngSubmit)="saveTemplate()">
                         <mat-form-field appearance="outline">
                           <mat-label>Step Number</mat-label>
-                          <input matInput type="number" formControlName="stepNumber" min="1" max="7">
+                          <input matInput type="number" formControlName="stepNumber" min="1" max="20">
                         </mat-form-field>
                         <mat-form-field appearance="outline">
                           <mat-label>Subject</mat-label>
@@ -119,6 +118,14 @@ import { EmailJobService } from '../../../services/email-job.service';
                                     [placeholder]="bodyPlaceholder"></textarea>
                           <mat-hint>Use: {{ tokenName }} {{ tokenRole }} {{ tokenCompany }} {{ tokenCategory }}</mat-hint>
                         </mat-form-field>
+                        <div class="scheduled-at-field">
+                          <label class="dt-label">Send Date &amp; Time <span class="required-star">*</span></label>
+                          <input type="datetime-local" formControlName="scheduledAt" class="dt-input">
+                          <div class="dt-hint">Set the exact date and time to send this email step.</div>
+                          @if (templateForm.get('scheduledAt')?.hasError('required') && templateForm.get('scheduledAt')?.touched) {
+                            <div class="dt-error">Send date and time is required</div>
+                          }
+                        </div>
                         <div class="form-actions">
                           <button mat-button type="button" (click)="cancelTemplateForm()">Cancel</button>
                           <button mat-raised-button color="primary" type="submit" [disabled]="templateForm.invalid">Save</button>
@@ -145,6 +152,17 @@ import { EmailJobService } from '../../../services/email-job.service';
                       </div>
                     </mat-card-header>
                     <mat-card-content>
+                      @if (t.scheduledAt) {
+                        <div class="schedule-badge">
+                          <mat-icon>schedule</mat-icon>
+                          Sends: {{ t.scheduledAt | date:'medium' }}
+                        </div>
+                      } @else {
+                        <div class="schedule-badge missing">
+                          <mat-icon>warning</mat-icon>
+                          No send date set — edit this step to add one before launching.
+                        </div>
+                      }
                       <pre class="body-preview">{{ t.bodyTemplate }}</pre>
                     </mat-card-content>
                   </mat-card>
@@ -337,6 +355,24 @@ import { EmailJobService } from '../../../services/email-job.service';
       background: #f8f9fa; padding: 12px; border-radius: 4px; margin: 0;
       max-height: 150px; overflow-y: auto;
     }
+    .schedule-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #1a73e8; margin-bottom: 10px;
+      mat-icon { font-size: 16px; width: 16px; height: 16px; }
+      &.missing { color: #e37400; }
+    }
+    .scheduled-at-field {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .dt-label { font-size: 14px; color: #5f6368; font-weight: 500; }
+    .required-star { color: #ea4335; }
+    .dt-input {
+      border: 1px solid #dadce0; border-radius: 4px; padding: 10px 12px;
+      font-size: 14px; color: #202124; width: 100%; box-sizing: border-box;
+      &:focus { outline: none; border-color: #1a73e8; }
+    }
+    .dt-hint { font-size: 12px; color: #5f6368; }
+    .dt-error { font-size: 12px; color: #ea4335; }
     .detail-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
     .detail-row { display: flex; gap: 16px; align-items: baseline; }
     .label { width: 130px; font-weight: 500; color: #5f6368; font-size: 13px; flex-shrink: 0; }
@@ -386,7 +422,8 @@ export class CampaignDetailComponent implements OnInit {
     this.templateForm = this.fb.group({
       stepNumber: [1, [Validators.required, Validators.min(1)]],
       subject: ['', Validators.required],
-      bodyTemplate: ['', Validators.required]
+      bodyTemplate: ['', Validators.required],
+      scheduledAt: ['', Validators.required]
     });
   }
 
@@ -438,13 +475,15 @@ export class CampaignDetailComponent implements OnInit {
 
   openTemplateForm(): void {
     this.editingTemplate = null;
-    this.templateForm.reset({ stepNumber: this.templates.length + 1 });
+    this.templateForm.reset({ stepNumber: this.templates.length + 1, scheduledAt: '' });
     this.showTemplateForm = true;
   }
 
   editTemplate(t: EmailTemplate): void {
     this.editingTemplate = t;
-    this.templateForm.patchValue(t);
+    // Convert ISO string (2024-06-01T09:00:00) → datetime-local format (2024-06-01T09:00)
+    const scheduledAt = t.scheduledAt ? t.scheduledAt.substring(0, 16) : '';
+    this.templateForm.patchValue({ ...t, scheduledAt });
     this.showTemplateForm = true;
   }
 
@@ -455,7 +494,10 @@ export class CampaignDetailComponent implements OnInit {
 
   saveTemplate(): void {
     if (this.templateForm.invalid) return;
-    const data = { ...this.templateForm.value, campaignId: this.campaignId };
+    // datetime-local gives "2024-06-01T09:00"; backend expects full ISO "2024-06-01T09:00:00"
+    const raw = this.templateForm.value;
+    const scheduledAt = raw.scheduledAt ? raw.scheduledAt + ':00' : null;
+    const data = { ...raw, scheduledAt, campaignId: this.campaignId };
     const req = this.editingTemplate
         ? this.campaignService.updateTemplate(this.campaignId, this.editingTemplate.id!, data)
         : this.campaignService.addTemplate(this.campaignId, data);

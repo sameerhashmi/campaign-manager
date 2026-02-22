@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "email_templates")
 @Data
@@ -20,9 +22,7 @@ public class EmailTemplate {
     @JoinColumn(name = "campaign_id", nullable = false)
     private Campaign campaign;
 
-    /**
-     * Step number (1-based), corresponds to the position in intervalDays.
-     */
+    /** Step number (1-based) defining the order of emails in the sequence. */
     @Column(name = "step_number", nullable = false)
     private Integer stepNumber;
 
@@ -34,4 +34,8 @@ public class EmailTemplate {
      */
     @Column(nullable = false, columnDefinition = "TEXT")
     private String bodyTemplate;
+
+    /** The exact date and time this email step should be sent. */
+    @Column(name = "scheduled_at")
+    private LocalDateTime scheduledAt;
 }

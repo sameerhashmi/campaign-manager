@@ -59,13 +59,6 @@ import { Campaign } from '../../../models/campaign.model';
                   <td mat-cell *matCellDef="let c">{{ c.contactCount }}</td>
                 </ng-container>
 
-                <ng-container matColumnDef="intervalDays">
-                  <th mat-header-cell *matHeaderCellDef>Schedule</th>
-                  <td mat-cell *matCellDef="let c">
-                    <span class="interval-chip">Days: {{ c.intervalDays }}</span>
-                  </td>
-                </ng-container>
-
                 <ng-container matColumnDef="status">
                   <th mat-header-cell *matHeaderCellDef>Status</th>
                   <td mat-cell *matCellDef="let c">
@@ -135,7 +128,6 @@ import { Campaign } from '../../../models/campaign.model';
     .campaign-link { color: #1a73e8; text-decoration: none; font-weight: 500; }
     .campaign-link:hover { text-decoration: underline; }
     .cell-sub { font-size: 12px; color: #9aa0a6; }
-    .interval-chip { font-size: 12px; background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; }
     .status-chip {
       padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
       &.draft     { background:#fff3e0; color:#e65100; }
@@ -154,7 +146,7 @@ import { Campaign } from '../../../models/campaign.model';
 export class CampaignListComponent implements OnInit {
   campaigns: Campaign[] = [];
   loading = true;
-  displayedColumns = ['name', 'gmailEmail', 'contacts', 'intervalDays', 'status', 'createdAt', 'actions'];
+  displayedColumns = ['name', 'gmailEmail', 'contacts', 'status', 'createdAt', 'actions'];
 
   constructor(
     private campaignService: CampaignService,

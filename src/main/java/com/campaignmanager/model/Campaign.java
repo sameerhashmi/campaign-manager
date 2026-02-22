@@ -30,11 +30,11 @@ public class Campaign {
     private String gmailEmail;
 
     /**
-     * Comma-separated interval days, e.g. "0,3,7,14,21,30"
-     * Each value represents days from enrollment to send that step's email.
+     * Retained for database compatibility. Each email template now carries
+     * its own {@code scheduled_at} datetime; this field is no longer used.
      */
-    @Column(name = "interval_days", nullable = false)
-    private String intervalDays = "0,3,7,14,21,30";
+    @Column(name = "interval_days")
+    private String intervalDays;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

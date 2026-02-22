@@ -6,13 +6,13 @@ A full-stack email campaign management application built with **Spring Boot 3** 
 
 ## Features
 
-- **Campaign Dashboard** — Stats cards showing campaigns, contacts, emails sent/pending
-- **Campaign Management** — Create, launch, pause, resume campaigns with 6-7 email sequences
-- **Personalization Tokens** — Use `{{name}}`, `{{role}}`, `{{company}}`, `{{category}}` in templates
-- **Contact Management** — Add contacts manually or bulk-import via CSV/Excel
-- **Gmail Automation** — Playwright controls Gmail web UI to send emails from your account
-- **Smart Scheduling** — Define intervals (e.g. Day 0, 3, 7, 14, 21, 30) per campaign; Spring Scheduler sends automatically
-- **Status Tracking** — Track each email job: SCHEDULED, SENT, FAILED, with retry support
+- **Campaign Dashboard** — Stats cards showing campaigns, contacts, emails sent/pending/failed
+- **Campaign Management** — Create, launch, pause, and resume campaigns with multi-step email sequences
+- **Custom Send Scheduling** — Set an exact **date and time** for each email step (e.g. Step 1: June 1 at 9 AM, Step 2: June 5 at 2 PM)
+- **Personalization Tokens** — Use `{{name}}`, `{{role}}`, `{{company}}`, `{{category}}` in subject and body
+- **Contact Management** — Add contacts individually or bulk-import via Excel (`.xlsx`)
+- **Gmail Session Login** — Log in to Gmail once via Settings; Playwright saves the session and reuses it for all sends — no stored passwords
+- **Status Tracking** — Every email job shows SCHEDULED, SENT, FAILED status with retry support
 - **Single JAR Deployment** — Angular is bundled into the Spring Boot JAR at build time
 
 ---
@@ -38,66 +38,19 @@ git clone https://github.com/YOUR_USERNAME/campaign-manager.git
 cd campaign-manager
 ```
 
-### 2. Install Playwright browsers
-
-Playwright needs to download Chromium once before first use:
-
-```bash
-mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install chromium"
-```
-
-Or run it manually after the first build attempt:
-
-```bash
-# Inside the project directory
-java -cp target/campaign-manager-1.0.0.jar com.microsoft.playwright.CLI install chromium
-```
-
-### 3. Set up a Gmail App Password (Recommended)
-
-Using your regular Gmail password with automation often triggers Google security blocks. Use an **App Password** instead:
-
-1. Go to your Google Account → **Security**
-2. Enable **2-Step Verification** (required for App Passwords)
-3. Go to **Security → App Passwords**
-4. Select app: **Mail**, device: **Other (Custom name)** → enter "Campaign Manager"
-5. Click **Generate** — copy the 16-character password
-6. Use this App Password in the app (not your main password)
-
-Direct link: https://myaccount.google.com/apppasswords
-
-### 4. Configure the application (optional)
-
-Edit `src/main/resources/application.properties` to customize:
-
-```properties
-# Run Playwright browser visibly (false = headless/invisible)
-playwright.headless=false
-
-# Server port (default 8080)
-server.port=8080
-
-# H2 database location (default: ./data/campaigndb)
-spring.datasource.url=jdbc:h2:file:./data/campaigndb
-```
-
----
-
-## Build & Run
-
-### Build (single command)
+### 2. Build
 
 ```bash
 mvn package -DskipTests
 ```
 
 This will:
-1. Download Node 20 + npm (first time only, ~2 minutes)
+1. Download Node 20 + npm (first time only)
 2. Install Angular dependencies (`npm install`)
-3. Build Angular (`ng build`) → output to `src/main/resources/static/`
+3. Build Angular (`ng build`) → output into `src/main/resources/static/`
 4. Package everything into `target/campaign-manager-1.0.0.jar`
 
-### Run
+### 3. Run
 
 ```bash
 java -jar target/campaign-manager-1.0.0.jar
@@ -105,7 +58,7 @@ java -jar target/campaign-manager-1.0.0.jar
 
 Open your browser at: **http://localhost:8080**
 
-### Default login credentials
+### 4. Default login credentials
 
 | Username | Password |
 |----------|----------|
@@ -115,74 +68,98 @@ Open your browser at: **http://localhost:8080**
 
 ---
 
+## First-Time Gmail Setup
+
+Before sending any emails you need to connect your Gmail account once:
+
+1. Log into the app and navigate to **Settings** (gear icon in the sidebar)
+2. Click **Connect Gmail**
+3. A Chromium browser window opens — log into your Gmail account normally
+4. Once you reach the Gmail inbox, the session is automatically saved
+5. The Settings page shows **Connected** — you're done
+
+The session is saved to `./data/gmail-session.json`. Playwright reuses it for every send. No username or password is ever stored in the database.
+
+> **If Gmail prompts for 2-factor auth**, complete it in the browser window. The app waits up to 2 minutes.
+
+---
+
+## Creating a Campaign (Step-by-Step)
+
+1. **Connect Gmail** in Settings (one-time setup above)
+2. Go to **Campaigns → New Campaign**
+3. Enter a campaign name and optionally your Gmail address (for reference)
+4. Optionally upload an Excel file to import contacts and templates in one step (see Excel format below)
+5. Click **Create Campaign**
+6. In the campaign detail, go to the **Email Templates** tab
+7. Click **Add Step** for each email in your sequence:
+   - Set the **Step Number**, **Subject**, and **Body**
+   - Set the **Send Date & Time** — the exact datetime to send this email (e.g. June 1, 2024 at 9:00 AM)
+   - Use tokens: `{{name}}`, `{{role}}`, `{{company}}`, `{{category}}`
+8. Go to the **Contacts** tab → click **Add Contacts** to enroll contacts
+9. Click **Launch** — email jobs are created for every contact × every template, each scheduled at the datetime you set per step
+10. The scheduler checks for due jobs every 60 seconds and sends them via Gmail automation
+11. Monitor status in the **Email Jobs** tab (SCHEDULED → SENT or FAILED with retry)
+
+---
+
+## Excel Import Format
+
+When creating a campaign you can upload an `.xlsx` file with **two sheets** to import contacts and templates at once.
+
+### Sheet 1 — "Contacts"
+
+| name | email | role | company |
+|------|-------|------|---------|
+| John Smith | john@acme.com | VP Sales | Acme Corp |
+| Jane Doe | jane@startup.io | CTO | StartupIO |
+
+- `email` is required; all other columns are optional
+- Contacts are **upserted** by email — existing contacts are updated
+
+### Sheet 2 — "Templates"
+
+| step_number | subject | body | scheduled_at |
+|-------------|---------|------|--------------|
+| 1 | Hi {{name}}, quick question | Dear {{name}}, ... | 2024-06-01 09:00 |
+| 2 | Following up | Just checking in... | 2024-06-05 14:00 |
+| 3 | Last touch | Hi {{name}}, one more thought... | 2024-06-12 10:00 |
+
+- `scheduled_at` format: `YYYY-MM-DD HH:MM` (24-hour clock)
+- `step_number`, `subject`, `body` are required; `scheduled_at` is optional (you can set it in the UI after import)
+- Tokens supported in subject and body: `{{name}}`, `{{role}}`, `{{company}}`, `{{category}}`
+
+---
+
+## Application URLs
+
+| URL | Description |
+|-----|-------------|
+| http://localhost:8080 | Main application |
+| http://localhost:8080/h2-console | H2 database browser |
+| http://localhost:8080/api/dashboard/stats | Dashboard stats JSON |
+
+H2 console JDBC URL: `jdbc:h2:file:./data/campaigndb` (username: `sa`, no password)
+
+---
+
 ## Development Mode (Hot Reload)
 
-For active development, run backend and frontend separately:
+Run backend and frontend separately for live reload during development:
 
 **Terminal 1 — Spring Boot:**
 ```bash
 mvn spring-boot:run
 ```
 
-**Terminal 2 — Angular (with proxy to backend):**
+**Terminal 2 — Angular:**
 ```bash
 cd src/main/frontend
 npm install    # first time only
-npm start      # runs ng serve with proxy to localhost:8080
+npm start      # ng serve with proxy to localhost:8080
 ```
 
 Open: **http://localhost:4200** — Angular dev server with live reload.
-API calls to `/api/**` are proxied to Spring Boot on `:8080`.
-
----
-
-## CSV Import Format
-
-Upload a `.csv` or `.xlsx` file with this structure:
-
-```csv
-email,name,role,company,category
-john.smith@acme.com,John Smith,VP Sales,Acme Corp,Enterprise
-jane.doe@startup.io,Jane Doe,CTO,StartupIO,SMB
-alice.wang@techco.com,Alice Wang,Founder,TechCo,Enterprise
-```
-
-**Column headers** (case-insensitive):
-- `email` — required
-- `name` — required
-- `role` — optional
-- `company` — optional
-- `category` — optional (used in `{{category}}` token)
-
-Contacts are **upserted** by email — existing contacts are updated, new ones are created.
-
----
-
-## Creating a Campaign (Step-by-Step)
-
-1. **Login** at http://localhost:8080
-2. Go to **Campaigns → New Campaign**
-3. Enter campaign name, your Gmail address, App Password, and interval days
-   - Example intervals: `0,3,7,14,21,30` (sends 6 emails over 30 days)
-4. Click **Create Campaign**
-5. In the campaign detail, go to **Email Templates** tab
-6. Click **Add Step** for each email in your sequence
-   - Use tokens: `{{name}}`, `{{role}}`, `{{company}}`, `{{category}}`
-7. Go to **Contacts** tab → **Add Contacts** to enroll contacts
-8. Click **Launch** to activate the campaign
-   - Email jobs are created automatically with `scheduled_at` dates
-9. The scheduler sends due emails every 60 seconds via Gmail automation
-10. Monitor status in the **Email Jobs** tab
-
----
-
-## Application Ports & URLs
-
-| URL | Description |
-|-----|-------------|
-| http://localhost:8080 | Main application |
-| http://localhost:8080/h2-console | H2 database browser (JDBC URL: `jdbc:h2:file:./data/campaigndb`) |
-| http://localhost:8080/api/dashboard/stats | Dashboard stats JSON |
 
 ---
 
@@ -200,47 +177,50 @@ campaign-manager/
 │       │   ├── dto/                    # Data transfer objects
 │       │   ├── model/                  # JPA entities + enums
 │       │   ├── repository/             # Spring Data JPA repos
-│       │   ├── scheduler/              # Email queue processor
+│       │   ├── scheduler/              # Email queue processor (runs every 60s)
 │       │   ├── security/               # JWT utility + filter
 │       │   └── service/
-│       │       └── PlaywrightGmailService.java  # Gmail automation
+│       │       ├── PlaywrightSessionService.java  # Gmail session login
+│       │       └── PlaywrightGmailService.java    # Email sending automation
 │       ├── frontend/                   # Angular 17 source
 │       │   ├── angular.json
 │       │   ├── package.json
 │       │   └── src/app/
-│       │       ├── components/         # Login, Dashboard, Campaigns, Contacts
+│       │       ├── components/         # Login, Dashboard, Campaigns, Contacts, Settings
 │       │       ├── services/           # HTTP API services
 │       │       ├── models/             # TypeScript interfaces
 │       │       ├── guards/             # Auth guard
 │       │       └── interceptors/       # JWT header interceptor
 │       └── resources/
 │           ├── application.properties
-│           └── static/                 # Angular build output (generated)
-└── data/                               # H2 database files (created at runtime)
+│           └── static/                 # Angular build output (auto-generated by Maven)
+└── data/                               # Created at runtime
+    ├── campaigndb.mv.db                # H2 database file
+    └── gmail-session.json              # Playwright saved session (do not share)
 ```
 
 ---
 
 ## Troubleshooting
 
-### Playwright / Gmail Issues
+### Gmail / Playwright Issues
 
-**Problem:** Gmail login fails or shows "unusual activity" warning
+**Problem:** "Connect Gmail" opens a browser but the settings page shows a timeout error
+**Solution:** Gmail keeps persistent network connections so the app no longer waits for "network idle" — it saves the session as soon as the Gmail inbox URL is detected. If you still see a timeout, try clicking Connect Gmail again.
+
+**Problem:** Gmail login was completed but emails aren't sending
 **Solution:**
-- Use a Gmail App Password instead of your main password
-- Run with `playwright.headless=false` to see what's happening in the browser
-- Make sure "Less secure app access" is not needed — App Passwords bypass this
+- Check the Email Jobs tab — jobs in FAILED status show the error message
+- The Gmail session may have expired; go to Settings → Disconnect → Connect Gmail again to refresh it
+- Run with `playwright.headless=false` in `application.properties` to watch what Playwright does
 
-**Problem:** Playwright can't find Gmail compose button
-**Solution:** Gmail occasionally changes their CSS selectors. Check the `PlaywrightGmailService.java` selectors and update if needed.
-
-**Problem:** Browser hangs or session expires
-**Solution:** The service automatically re-creates the browser context on failure. Check the logs for error messages.
+**Problem:** Playwright can't find Gmail's compose button
+**Solution:** Gmail occasionally changes their CSS selectors. Check `PlaywrightGmailService.java` and update the selectors if needed.
 
 ### Build Issues
 
 **Problem:** `npm install` fails during Maven build
-**Solution:** The `frontend-maven-plugin` downloads Node locally to `target/`. Delete `target/` and retry:
+**Solution:** Delete `target/` and retry:
 ```bash
 mvn clean package -DskipTests
 ```
@@ -252,7 +232,6 @@ cd src/main/frontend
 npm install
 npm run build
 ```
-Check the error output for specific issues.
 
 ### H2 Database
 
@@ -261,16 +240,22 @@ Check the error output for specific issues.
 ```properties
 spring.datasource.url=jdbc:h2:file:./data/campaigndb
 ```
-The `data/` directory is created in your working directory when you run the JAR.
+
+**Problem:** "Database is already in use" on startup
+**Solution:** Kill any lingering Java process from a previous run:
+```bash
+pkill -f "campaign-manager"
+```
 
 ---
 
 ## Security Notes
 
-- Passwords are stored using **BCrypt** hashing
-- Gmail credentials are stored in the H2 database — **do not expose the database file**
+- App-level passwords are hashed with **BCrypt**
+- Gmail credentials are **never stored** — only the Playwright session cookie file (`gmail-session.json`)
 - JWT tokens expire after 1 hour (configurable via `app.jwt.expiration-ms`)
-- For production use, replace H2 with PostgreSQL and use environment variables for secrets
+- The H2 console is enabled for debugging; disable it in production (`spring.h2.console.enabled=false`)
+- For production, replace H2 with PostgreSQL and use environment variables for the JWT secret
 
 ---
 

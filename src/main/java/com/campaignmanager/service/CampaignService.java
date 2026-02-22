@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -76,20 +75,28 @@ public class CampaignService {
             throw new RuntimeException("Campaign has no email templates. Add at least one template before launching.");
         }
 
-        int[] intervalDays = parseIntervalDays(campaign.getIntervalDays());
         List<CampaignContact> contacts = campaignContactRepository.findByCampaignId(id);
 
         if (contacts.isEmpty()) {
             throw new RuntimeException("No contacts enrolled in this campaign. Add contacts before launching.");
         }
 
+        // Validate that all templates have a scheduled date/time set
+        List<EmailTemplate> missingSchedule = templates.stream()
+                .filter(t -> t.getScheduledAt() == null)
+                .toList();
+        if (!missingSchedule.isEmpty()) {
+            throw new RuntimeException(
+                    "All email steps must have a scheduled date and time before launching. " +
+                    "Missing schedule on step(s): " +
+                    missingSchedule.stream().map(t -> String.valueOf(t.getStepNumber()))
+                            .reduce((a, b) -> a + ", " + b).orElse(""));
+        }
+
         LocalDateTime now = LocalDateTime.now();
 
         for (CampaignContact cc : contacts) {
-            for (int i = 0; i < templates.size(); i++) {
-                EmailTemplate template = templates.get(i);
-                int daysOffset = i < intervalDays.length ? intervalDays[i] : i * 3;
-
+            for (EmailTemplate template : templates) {
                 // Check if job already exists for this cc + step
                 boolean jobExists = cc.getEmailJobs().stream()
                         .anyMatch(j -> j.getStepNumber().equals(template.getStepNumber()));
@@ -104,7 +111,7 @@ public class CampaignService {
                 job.setStepNumber(template.getStepNumber());
                 job.setSubject(resolvedSubject);
                 job.setBody(resolvedBody);
-                job.setScheduledAt(cc.getEnrolledAt().plusDays(daysOffset));
+                job.setScheduledAt(template.getScheduledAt());
                 job.setStatus(EmailJobStatus.SCHEDULED);
                 emailJobRepository.save(job);
             }
@@ -139,18 +146,10 @@ public class CampaignService {
                 .replace("{{category}}", contact.getCategory() != null ? contact.getCategory() : "");
     }
 
-    private int[] parseIntervalDays(String intervalDays) {
-        return Arrays.stream(intervalDays.split(","))
-                .map(String::trim)
-                .mapToInt(Integer::parseInt)
-                .toArray();
-    }
-
     private void mapDtoToEntity(CampaignDto dto, Campaign campaign) {
         campaign.setName(dto.getName());
         campaign.setDescription(dto.getDescription());
         campaign.setGmailEmail(dto.getGmailEmail());
-        campaign.setIntervalDays(dto.getIntervalDays());
     }
 
     public CampaignDto toDto(Campaign c) {
@@ -159,7 +158,6 @@ public class CampaignService {
         dto.setName(c.getName());
         dto.setDescription(c.getDescription());
         dto.setGmailEmail(c.getGmailEmail());
-        dto.setIntervalDays(c.getIntervalDays());
         dto.setStatus(c.getStatus());
         dto.setCreatedAt(c.getCreatedAt());
         dto.setLaunchedAt(c.getLaunchedAt());
@@ -174,6 +172,7 @@ public class CampaignService {
         dto.setStepNumber(t.getStepNumber());
         dto.setSubject(t.getSubject());
         dto.setBodyTemplate(t.getBodyTemplate());
+        dto.setScheduledAt(t.getScheduledAt());
         return dto;
     }
 }

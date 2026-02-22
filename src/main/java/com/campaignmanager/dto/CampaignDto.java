@@ -19,9 +19,6 @@ public class CampaignDto {
     /** Optional — display/reference only. Sending uses the stored Playwright session. */
     private String gmailEmail;
 
-    @NotBlank
-    private String intervalDays;
-
     private CampaignStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime launchedAt;

@@ -46,15 +46,6 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
                 <textarea matInput formControlName="description" rows="2"></textarea>
               </mat-form-field>
 
-              <mat-form-field appearance="outline" style="margin-top: 8px">
-                <mat-label>Email Interval Days</mat-label>
-                <input matInput formControlName="intervalDays" placeholder="0,3,7,14,21,30">
-                <mat-hint>Comma-separated days from enrollment. E.g. "0,3,7,14,21,30" sends 6 emails.</mat-hint>
-                @if (form.get('intervalDays')?.hasError('required')) {
-                  <mat-error>Interval days is required</mat-error>
-                }
-              </mat-form-field>
-
               <div class="session-notice">
                 <mat-icon class="notice-icon">info</mat-icon>
                 <span>
@@ -99,7 +90,7 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
                     <strong>Expected format:</strong>
                     Sheet 1 "Contacts" — columns: <code>name</code>, <code>email</code>, <code>role</code>, <code>company</code>
                     &nbsp;|&nbsp;
-                    Sheet 2 "Templates" — columns: <code>step_number</code>, <code>subject</code>, <code>body</code>
+                    Sheet 2 "Templates" — columns: <code>step_number</code>, <code>subject</code>, <code>body</code>, <code>scheduled_at</code> (e.g. <code>2024-06-01 09:00</code>)
                   </div>
 
                   @if (importResult) {
@@ -188,8 +179,7 @@ export class CampaignFormComponent implements OnInit {
     this.form = this.fb.group({
       name: ['', Validators.required],
       description: [''],
-      gmailEmail: [''],
-      intervalDays: ['0,3,7,14,21,30', Validators.required]
+      gmailEmail: ['']
     });
   }
 
@@ -201,8 +191,7 @@ export class CampaignFormComponent implements OnInit {
         this.form.patchValue({
           name: c.name,
           description: c.description,
-          gmailEmail: c.gmailEmail,
-          intervalDays: c.intervalDays
+          gmailEmail: c.gmailEmail
         });
       });
     }

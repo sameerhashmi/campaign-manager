@@ -128,8 +128,14 @@ public class PlaywrightSessionService {
                 throw new Exception(msg);
             }
 
-            page.waitForLoadState(LoadState.NETWORKIDLE,
-                    new Page.WaitForLoadStateOptions().setTimeout(30_000));
+            // Wait for the basic page load; Gmail keeps making background requests
+            // so NETWORKIDLE never fires — LOAD is sufficient to confirm the inbox is ready.
+            try {
+                page.waitForLoadState(LoadState.LOAD,
+                        new Page.WaitForLoadStateOptions().setTimeout(15_000));
+            } catch (Exception ignored) {
+                // If even LOAD times out, the URL check already confirmed login — proceed.
+            }
 
             log.info("Gmail login detected — saving session state");
             Path sessionPath = getSessionPath();
