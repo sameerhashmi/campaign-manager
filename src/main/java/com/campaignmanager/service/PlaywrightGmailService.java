@@ -2,7 +2,6 @@ package com.campaignmanager.service;
 
 import com.campaignmanager.model.EmailJob;
 import com.microsoft.playwright.*;
-import com.microsoft.playwright.options.LoadState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,9 +30,10 @@ public class PlaywrightGmailService {
         Page page = context.newPage();
 
         try {
-            // Navigate to Gmail
+            // Navigate to Gmail — page.navigate already waits for the load event.
+            // NETWORKIDLE is never reached because Gmail holds persistent WebSocket connections,
+            // so we rely on waitForSelector for the compose button instead.
             page.navigate("https://mail.google.com/mail/u/0/");
-            page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(30_000));
 
             // If session expired and we're redirected to login, invalidate and fail
             if (page.url().contains("accounts.google.com")) {
