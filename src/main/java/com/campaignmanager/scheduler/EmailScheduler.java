@@ -42,17 +42,20 @@ public class EmailScheduler {
                 continue;
             }
 
-            // Enforce step ordering: step N is only sent after step N-1 has been SENT
-            // for the same contact in this campaign. This prevents multiple steps from
-            // firing at once when their scheduled times have all passed (e.g. during testing
-            // with past dates, or if the app was offline while steps became due).
+            // Enforce step ordering: step N only sends after step N-1 was SENT in a
+            // *previous* scheduler cycle. The 30-second cutoff prevents two consecutive
+            // steps from firing back-to-back in the same 60-second run when multiple
+            // scheduled dates are all in the past (e.g. past dates, offline catch-up).
             int stepNumber = job.getStepNumber();
             if (stepNumber > 1) {
+                LocalDateTime cutoff = LocalDateTime.now().minusSeconds(30);
                 boolean previousStepSent = job.getCampaignContact().getEmailJobs().stream()
                         .anyMatch(j -> j.getStepNumber() == stepNumber - 1
-                                && j.getStatus() == EmailJobStatus.SENT);
+                                && j.getStatus() == EmailJobStatus.SENT
+                                && j.getSentAt() != null
+                                && j.getSentAt().isBefore(cutoff));
                 if (!previousStepSent) {
-                    log.info("Deferring job id={} step={} for contact={} — step {} not yet SENT",
+                    log.info("Deferring job id={} step={} for contact={} — step {} not yet confirmed sent",
                             job.getId(), stepNumber,
                             job.getCampaignContact().getContact().getEmail(),
                             stepNumber - 1);
