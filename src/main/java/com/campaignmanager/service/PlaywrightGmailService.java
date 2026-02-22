@@ -96,7 +96,7 @@ public class PlaywrightGmailService {
         // Send via Ctrl+Enter keyboard shortcut — this is Gmail's official send shortcut
         // and is more reliable than clicking div[aria-label='Send'] which can be obscured
         // or mis-targeted.
-        page.keyboard().press("Control+Return");
+        page.keyboard().press("Control+Enter");
 
         // Wait for the compose window to close. Note: Gmail also closes the window when saving
         // a draft, so this alone is not sufficient confirmation. We pair it with the snackbar
