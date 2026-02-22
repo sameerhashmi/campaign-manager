@@ -9,7 +9,10 @@ export class EmailJobService {
 
   constructor(private http: HttpClient) {}
 
-  getAll(): Observable<EmailJob[]> {
+  getAll(status?: string): Observable<EmailJob[]> {
+    if (status) {
+      return this.http.get<EmailJob[]>(this.base, { params: { status } });
+    }
     return this.http.get<EmailJob[]>(this.base);
   }
 

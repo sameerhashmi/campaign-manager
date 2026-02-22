@@ -15,8 +15,8 @@ public class EmailJobController {
     private final EmailJobService emailJobService;
 
     @GetMapping
-    public List<EmailJobDto> getAll() {
-        return emailJobService.findAll();
+    public List<EmailJobDto> getAll(@RequestParam(required = false) String status) {
+        return emailJobService.findAll(status);
     }
 
     @PostMapping("/{id}/retry")

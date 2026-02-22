@@ -2,6 +2,7 @@ package com.campaignmanager.service;
 
 import com.campaignmanager.model.EmailJob;
 import com.microsoft.playwright.*;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -59,13 +60,15 @@ public class PlaywrightGmailService {
         page.waitForSelector("[gh='cm'], .T-I.T-I-KE", new Page.WaitForSelectorOptions().setTimeout(15_000));
         page.click("[gh='cm'], .T-I.T-I-KE");
 
-        // Wait for compose window
+        // Wait for compose window To field to appear
         page.waitForSelector("div[aria-label='To']", new Page.WaitForSelectorOptions().setTimeout(10_000));
 
-        // Fill To field
+        // Fill To field — type the address then Tab to confirm the recipient chip
         page.click("div[aria-label='To']");
         page.keyboard().type(to);
         page.keyboard().press("Tab");
+        // Short pause to let Gmail register the recipient chip before moving on
+        page.waitForTimeout(800);
 
         // Fill Subject
         page.click("input[name='subjectbox']");
@@ -75,14 +78,21 @@ public class PlaywrightGmailService {
         page.click("div[aria-label='Message Body']");
         page.keyboard().type(body);
 
-        // Send
+        // Click Send
         page.click("div[aria-label='Send']");
 
-        // Wait briefly to confirm send (snackbar appears)
+        // Wait for the compose window to close — this is the definitive confirmation that Gmail
+        // accepted and queued the email. If the window stays open, Gmail showed a validation error
+        // (e.g. invalid recipient, attachment too large) and the email was NOT sent.
         try {
-            page.waitForSelector(".bAq", new Page.WaitForSelectorOptions().setTimeout(5_000));
+            page.waitForSelector("div.T-P", new Page.WaitForSelectorOptions()
+                    .setState(WaitForSelectorState.HIDDEN)
+                    .setTimeout(15_000));
+            log.debug("Compose window closed — email queued for delivery to {}", to);
         } catch (Exception e) {
-            log.debug("Send confirmation snackbar not detected (may have sent anyway)");
+            throw new RuntimeException(
+                    "Compose window did not close after clicking Send — email was NOT sent to " + to +
+                    ". Gmail may be showing a validation error (check for invalid recipient address).", e);
         }
     }
 }

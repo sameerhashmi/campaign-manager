@@ -30,8 +30,14 @@ public class EmailJobService {
         return jobs.stream().map(this::toDto).collect(Collectors.toList());
     }
 
-    public List<EmailJobDto> findAll() {
-        return emailJobRepository.findAll().stream().map(this::toDto).collect(Collectors.toList());
+    public List<EmailJobDto> findAll(String status) {
+        List<EmailJob> jobs;
+        if (status != null && !status.isBlank()) {
+            jobs = emailJobRepository.findByStatus(EmailJobStatus.valueOf(status.toUpperCase()));
+        } else {
+            jobs = emailJobRepository.findAllByOrderByScheduledAtDesc();
+        }
+        return jobs.stream().map(this::toDto).collect(Collectors.toList());
     }
 
     @Transactional

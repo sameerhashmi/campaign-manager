@@ -26,6 +26,10 @@ public interface EmailJobRepository extends JpaRepository<EmailJob, Long> {
     @Query("SELECT COUNT(ej) FROM EmailJob ej WHERE ej.status = 'SENT' AND ej.sentAt >= :since")
     long countSentSince(@Param("since") LocalDateTime since);
 
+    List<EmailJob> findByStatus(EmailJobStatus status);
+
+    List<EmailJob> findAllByOrderByScheduledAtDesc();
+
     @Query("SELECT ej FROM EmailJob ej WHERE ej.campaignContact.campaign.id = :campaignId " +
            "ORDER BY ej.scheduledAt DESC")
     List<EmailJob> findByCampaignIdOrdered(@Param("campaignId") Long campaignId);

@@ -5,10 +5,21 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableModule } from '@angular/material/table';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../shared/nav/nav.component';
 import { DashboardService } from '../../services/dashboard.service';
 import { DashboardStats } from '../../models/email-job.model';
 import { SettingsService, GmailSessionStatus } from '../../services/settings.service';
+import { CampaignService } from '../../services/campaign.service';
+import { ContactService } from '../../services/contact.service';
+import { EmailJobService } from '../../services/email-job.service';
+import { Campaign } from '../../models/campaign.model';
+import { Contact } from '../../models/contact.model';
+import { EmailJob } from '../../models/email-job.model';
+
+type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
 
 @Component({
   selector: 'app-dashboard',
@@ -16,7 +27,7 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
   imports: [
     CommonModule, RouterLink,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressSpinnerModule,
-    NavComponent
+    MatTableModule, MatChipsModule, MatTooltipModule, NavComponent
   ],
   template: `
     <app-nav>
@@ -44,7 +55,9 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
 
           <!-- Stats Grid -->
           <div class="stats-grid">
-            <mat-card class="stats-card">
+
+            <mat-card class="stats-card clickable" [class.expanded]="activePanel === 'campaigns'"
+                      (click)="toggle('campaigns')">
               <mat-card-content>
                 <div class="stat-row">
                   <div class="stat-info">
@@ -54,10 +67,14 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
                   </div>
                   <mat-icon class="stat-icon" style="color:#1a73e8">campaign</mat-icon>
                 </div>
+                <div class="expand-hint">
+                  <mat-icon>{{ activePanel === 'campaigns' ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </div>
               </mat-card-content>
             </mat-card>
 
-            <mat-card class="stats-card">
+            <mat-card class="stats-card clickable" [class.expanded]="activePanel === 'contacts'"
+                      (click)="toggle('contacts')">
               <mat-card-content>
                 <div class="stat-row">
                   <div class="stat-info">
@@ -67,10 +84,14 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
                   </div>
                   <mat-icon class="stat-icon" style="color:#34a853">people</mat-icon>
                 </div>
+                <div class="expand-hint">
+                  <mat-icon>{{ activePanel === 'contacts' ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </div>
               </mat-card-content>
             </mat-card>
 
-            <mat-card class="stats-card">
+            <mat-card class="stats-card clickable" [class.expanded]="activePanel === 'sent'"
+                      (click)="toggle('sent')">
               <mat-card-content>
                 <div class="stat-row">
                   <div class="stat-info">
@@ -80,10 +101,14 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
                   </div>
                   <mat-icon class="stat-icon" style="color:#fbbc04">send</mat-icon>
                 </div>
+                <div class="expand-hint">
+                  <mat-icon>{{ activePanel === 'sent' ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </div>
               </mat-card-content>
             </mat-card>
 
-            <mat-card class="stats-card">
+            <mat-card class="stats-card clickable" [class.expanded]="activePanel === 'scheduled'"
+                      (click)="toggle('scheduled')">
               <mat-card-content>
                 <div class="stat-row">
                   <div class="stat-info">
@@ -93,22 +118,165 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
                   </div>
                   <mat-icon class="stat-icon" style="color:#1a73e8">schedule</mat-icon>
                 </div>
+                <div class="expand-hint">
+                  <mat-icon>{{ activePanel === 'scheduled' ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </div>
               </mat-card-content>
             </mat-card>
 
-            <mat-card class="stats-card">
+            <mat-card class="stats-card clickable" [class.expanded]="activePanel === 'failed'"
+                      (click)="toggle('failed')">
               <mat-card-content>
                 <div class="stat-row">
                   <div class="stat-info">
                     <div class="stat-value">{{ stats.emailsFailed }}</div>
                     <div class="stat-label">Failed</div>
-                    <div class="stat-sub">{{ stats.emailsSentToday }} sent today</div>
+                    <div class="stat-sub">Click to view &amp; retry</div>
                   </div>
                   <mat-icon class="stat-icon" style="color:#ea4335">error_outline</mat-icon>
                 </div>
+                <div class="expand-hint">
+                  <mat-icon>{{ activePanel === 'failed' ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </div>
               </mat-card-content>
             </mat-card>
+
           </div>
+
+          <!-- Drill-down Detail Panel -->
+          @if (activePanel) {
+            <mat-card class="detail-panel">
+              <mat-card-header>
+                <mat-card-title>{{ panelTitle }}</mat-card-title>
+                <button mat-icon-button (click)="activePanel = null" style="margin-left:auto">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </mat-card-header>
+              <mat-card-content>
+
+                @if (panelLoading) {
+                  <div class="panel-loading"><mat-spinner diameter="32"></mat-spinner></div>
+                }
+
+                <!-- Campaigns panel -->
+                @if (activePanel === 'campaigns' && !panelLoading) {
+                  <table mat-table [dataSource]="campaigns" class="panel-table">
+                    <ng-container matColumnDef="name">
+                      <th mat-header-cell *matHeaderCellDef>Name</th>
+                      <td mat-cell *matCellDef="let c">
+                        <a [routerLink]="['/campaigns', c.id]" class="link">{{ c.name }}</a>
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="status">
+                      <th mat-header-cell *matHeaderCellDef>Status</th>
+                      <td mat-cell *matCellDef="let c">
+                        <span class="chip {{ c.status?.toLowerCase() }}">{{ c.status }}</span>
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="contacts">
+                      <th mat-header-cell *matHeaderCellDef>Contacts</th>
+                      <td mat-cell *matCellDef="let c">{{ c.contactCount }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="created">
+                      <th mat-header-cell *matHeaderCellDef>Created</th>
+                      <td mat-cell *matCellDef="let c">{{ c.createdAt | date:'mediumDate' }}</td>
+                    </ng-container>
+                    <tr mat-header-row *matHeaderRowDef="['name','status','contacts','created']"></tr>
+                    <tr mat-row *matRowDef="let row; columns: ['name','status','contacts','created'];"></tr>
+                  </table>
+                  @if (campaigns.length === 0) {
+                    <p class="empty-msg">No campaigns yet.</p>
+                  }
+                }
+
+                <!-- Contacts panel -->
+                @if (activePanel === 'contacts' && !panelLoading) {
+                  <table mat-table [dataSource]="contacts" class="panel-table">
+                    <ng-container matColumnDef="name">
+                      <th mat-header-cell *matHeaderCellDef>Name</th>
+                      <td mat-cell *matCellDef="let c">{{ c.name }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="email">
+                      <th mat-header-cell *matHeaderCellDef>Email</th>
+                      <td mat-cell *matCellDef="let c">{{ c.email }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="role">
+                      <th mat-header-cell *matHeaderCellDef>Role</th>
+                      <td mat-cell *matCellDef="let c">{{ c.role }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="company">
+                      <th mat-header-cell *matHeaderCellDef>Company</th>
+                      <td mat-cell *matCellDef="let c">{{ c.company }}</td>
+                    </ng-container>
+                    <tr mat-header-row *matHeaderRowDef="['name','email','role','company']"></tr>
+                    <tr mat-row *matRowDef="let row; columns: ['name','email','role','company'];"></tr>
+                  </table>
+                  @if (contacts.length === 0) {
+                    <p class="empty-msg">No contacts yet.</p>
+                  }
+                }
+
+                <!-- Email jobs panels (sent / scheduled / failed) -->
+                @if ((activePanel === 'sent' || activePanel === 'scheduled' || activePanel === 'failed') && !panelLoading) {
+                  <table mat-table [dataSource]="emailJobs" class="panel-table">
+                    <ng-container matColumnDef="contact">
+                      <th mat-header-cell *matHeaderCellDef>Contact</th>
+                      <td mat-cell *matCellDef="let j">
+                        <strong>{{ j.contactName }}</strong>
+                        <div class="sub">{{ j.contactEmail }}</div>
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="campaign">
+                      <th mat-header-cell *matHeaderCellDef>Campaign</th>
+                      <td mat-cell *matCellDef="let j">
+                        <a [routerLink]="['/campaigns', j.campaignId]" class="link">{{ j.campaignName }}</a>
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="step">
+                      <th mat-header-cell *matHeaderCellDef>Step</th>
+                      <td mat-cell *matCellDef="let j">{{ j.stepNumber }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="subject">
+                      <th mat-header-cell *matHeaderCellDef>Subject</th>
+                      <td mat-cell *matCellDef="let j">{{ j.subject }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="time">
+                      <th mat-header-cell *matHeaderCellDef>
+                        {{ activePanel === 'sent' ? 'Sent At' : 'Scheduled For' }}
+                      </th>
+                      <td mat-cell *matCellDef="let j">
+                        {{ (activePanel === 'sent' ? j.sentAt : j.scheduledAt) | date:'medium' }}
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="error">
+                      <th mat-header-cell *matHeaderCellDef>Error</th>
+                      <td mat-cell *matCellDef="let j">
+                        <span class="error-msg" [matTooltip]="j.errorMessage ?? ''">
+                          {{ j.errorMessage ? (j.errorMessage | slice:0:60) + (j.errorMessage.length > 60 ? '…' : '') : '' }}
+                        </span>
+                      </td>
+                    </ng-container>
+                    <ng-container matColumnDef="actions">
+                      <th mat-header-cell *matHeaderCellDef></th>
+                      <td mat-cell *matCellDef="let j">
+                        @if (j.status === 'FAILED') {
+                          <button mat-icon-button (click)="retryJob(j)" matTooltip="Retry">
+                            <mat-icon>replay</mat-icon>
+                          </button>
+                        }
+                      </td>
+                    </ng-container>
+                    <tr mat-header-row *matHeaderRowDef="jobColumns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: jobColumns;"></tr>
+                  </table>
+                  @if (emailJobs.length === 0) {
+                    <p class="empty-msg">No {{ activePanel }} emails.</p>
+                  }
+                }
+
+              </mat-card-content>
+            </mat-card>
+          }
 
           <!-- Quick Actions -->
           <div class="quick-actions">
@@ -151,24 +319,50 @@ import { SettingsService, GmailSessionStatus } from '../../services/settings.ser
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
-      margin-bottom: 32px;
+      margin-bottom: 20px;
+    }
+    .stats-card {
+      cursor: pointer;
+      transition: box-shadow 0.15s, border-color 0.15s;
+      border: 2px solid transparent;
+      &:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
+      &.expanded { border-color: #1a73e8; }
     }
     .stat-row { display: flex; align-items: center; justify-content: space-between; }
     .stat-value { font-size: 36px; font-weight: 700; color: #202124; }
     .stat-label { font-size: 14px; color: #5f6368; font-weight: 500; margin-top: 4px; }
     .stat-sub { font-size: 12px; color: #9aa0a6; margin-top: 2px; }
     .stat-icon { font-size: 40px; width: 40px; height: 40px; opacity: 0.8; }
+    .expand-hint {
+      display: flex; justify-content: center; margin-top: 8px;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; color: #9aa0a6; }
+    }
+    .detail-panel {
+      margin-bottom: 24px;
+      mat-card-header { display: flex; align-items: center; }
+    }
+    .panel-loading { display: flex; justify-content: center; padding: 32px; }
+    .panel-table { width: 100%; }
+    .link { color: #1a73e8; text-decoration: none; font-weight: 500; &:hover { text-decoration: underline; } }
+    .sub { font-size: 11px; color: #9aa0a6; }
+    .empty-msg { text-align: center; color: #9aa0a6; padding: 24px; font-size: 14px; }
+    .error-msg { font-size: 12px; color: #c62828; }
+    .chip {
+      padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 500;
+      &.draft     { background:#fff3e0; color:#e65100; }
+      &.active    { background:#e8f5e9; color:#2e7d32; }
+      &.paused    { background:#fff9c4; color:#f57f17; }
+      &.completed { background:#ede7f6; color:#4527a0; }
+    }
     .quick-actions h2 { font-size: 16px; font-weight: 500; color: #5f6368; margin-bottom: 12px; }
     .action-cards { display: flex; gap: 12px; flex-wrap: wrap; }
     .action-card {
-      cursor: pointer;
-      border-radius: 12px !important;
-      transition: transform 0.15s, box-shadow 0.15s;
-      min-width: 160px;
+      cursor: pointer; border-radius: 12px !important;
+      transition: transform 0.15s, box-shadow 0.15s; min-width: 160px;
+      &:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
+      mat-card-content { display: flex; align-items: center; gap: 12px; padding: 16px !important; }
+      span { font-size: 14px; font-weight: 500; }
     }
-    .action-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
-    .action-card mat-card-content { display: flex; align-items: center; gap: 12px; padding: 16px !important; }
-    .action-card span { font-size: 14px; font-weight: 500; }
   `]
 })
 export class DashboardComponent implements OnInit {
@@ -176,9 +370,37 @@ export class DashboardComponent implements OnInit {
   gmailStatus: GmailSessionStatus | null = null;
   loading = true;
 
+  activePanel: Panel = null;
+  panelLoading = false;
+
+  campaigns: Campaign[] = [];
+  contacts: Contact[] = [];
+  emailJobs: EmailJob[] = [];
+
+  get panelTitle(): string {
+    switch (this.activePanel) {
+      case 'campaigns': return 'All Campaigns';
+      case 'contacts':  return 'All Contacts';
+      case 'sent':      return 'Sent Emails';
+      case 'scheduled': return 'Scheduled Emails';
+      case 'failed':    return 'Failed Emails';
+      default:          return '';
+    }
+  }
+
+  get jobColumns(): string[] {
+    if (this.activePanel === 'failed') {
+      return ['contact', 'campaign', 'step', 'subject', 'time', 'error', 'actions'];
+    }
+    return ['contact', 'campaign', 'step', 'subject', 'time'];
+  }
+
   constructor(
     private dashboardService: DashboardService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private campaignService: CampaignService,
+    private contactService: ContactService,
+    private emailJobService: EmailJobService
   ) {}
 
   ngOnInit(): void {
@@ -189,6 +411,60 @@ export class DashboardComponent implements OnInit {
     this.settingsService.getStatus().subscribe({
       next: s => this.gmailStatus = s,
       error: () => {}
+    });
+  }
+
+  toggle(panel: Panel): void {
+    if (this.activePanel === panel) {
+      this.activePanel = null;
+      return;
+    }
+    this.activePanel = panel;
+    this.loadPanel(panel!);
+  }
+
+  private loadPanel(panel: NonNullable<Panel>): void {
+    this.panelLoading = true;
+    switch (panel) {
+      case 'campaigns':
+        this.campaignService.getAll().subscribe({
+          next: c => { this.campaigns = c; this.panelLoading = false; },
+          error: () => { this.panelLoading = false; }
+        });
+        break;
+      case 'contacts':
+        this.contactService.getAll().subscribe({
+          next: c => { this.contacts = c; this.panelLoading = false; },
+          error: () => { this.panelLoading = false; }
+        });
+        break;
+      case 'sent':
+        this.emailJobService.getAll('SENT').subscribe({
+          next: j => { this.emailJobs = j; this.panelLoading = false; },
+          error: () => { this.panelLoading = false; }
+        });
+        break;
+      case 'scheduled':
+        this.emailJobService.getAll('SCHEDULED').subscribe({
+          next: j => { this.emailJobs = j; this.panelLoading = false; },
+          error: () => { this.panelLoading = false; }
+        });
+        break;
+      case 'failed':
+        this.emailJobService.getAll('FAILED').subscribe({
+          next: j => { this.emailJobs = j; this.panelLoading = false; },
+          error: () => { this.panelLoading = false; }
+        });
+        break;
+    }
+  }
+
+  retryJob(job: EmailJob): void {
+    this.emailJobService.retry(job.id).subscribe({
+      next: () => {
+        this.emailJobService.getAll('FAILED').subscribe(j => this.emailJobs = j);
+        this.dashboardService.getStats().subscribe(s => this.stats = s);
+      }
     });
   }
 }
