@@ -32,9 +32,10 @@ public class Campaign {
     /**
      * Retained for database compatibility. Each email template now carries
      * its own {@code scheduled_at} datetime; this field is no longer used.
+     * Default empty string satisfies the existing NOT NULL constraint in H2.
      */
-    @Column(name = "interval_days")
-    private String intervalDays;
+    @Column(name = "interval_days", nullable = false)
+    private String intervalDays = "";
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
