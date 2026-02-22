@@ -63,36 +63,66 @@ public class PlaywrightGmailService {
         // Wait for compose window To field to appear
         page.waitForSelector("div[aria-label='To']", new Page.WaitForSelectorOptions().setTimeout(10_000));
 
-        // Fill To field — type the address then Tab to confirm the recipient chip
+        // Fill To field.
+        // IMPORTANT: We must press Enter (not Tab) to confirm the recipient as a chip.
+        // Without the chip, Gmail silently saves to Drafts instead of sending — the compose
+        // window closes but the email is never delivered.
         page.click("div[aria-label='To']");
         page.keyboard().type(to);
-        page.keyboard().press("Tab");
-        // Short pause to let Gmail register the recipient chip before moving on
-        page.waitForTimeout(800);
+        page.keyboard().press("Enter");
+
+        // Verify Gmail created the recipient chip before proceeding.
+        // The chip has a data-hovercard-id attribute matching the email address.
+        // If this selector times out the email was not added as a valid recipient.
+        try {
+            page.waitForSelector("div[data-hovercard-id='" + to + "']",
+                    new Page.WaitForSelectorOptions().setTimeout(5_000));
+            log.debug("Recipient chip confirmed for {}", to);
+        } catch (Exception e) {
+            // Chip not found — try Tab as secondary fallback and wait a moment
+            log.warn("Recipient chip not detected for {} via Enter, trying Tab fallback", to);
+            page.keyboard().press("Tab");
+            page.waitForTimeout(1_500);
+        }
 
         // Fill Subject
         page.click("input[name='subjectbox']");
         page.fill("input[name='subjectbox']", subject);
 
-        // Fill Body
+        // Click the body area then type the content
         page.click("div[aria-label='Message Body']");
         page.keyboard().type(body);
 
-        // Click Send
-        page.click("div[aria-label='Send']");
+        // Send via Ctrl+Enter keyboard shortcut — this is Gmail's official send shortcut
+        // and is more reliable than clicking div[aria-label='Send'] which can be obscured
+        // or mis-targeted.
+        page.keyboard().press("Control+Return");
 
-        // Wait for the compose window to close — this is the definitive confirmation that Gmail
-        // accepted and queued the email. If the window stays open, Gmail showed a validation error
-        // (e.g. invalid recipient, attachment too large) and the email was NOT sent.
+        // Wait for the compose window to close. Note: Gmail also closes the window when saving
+        // a draft, so this alone is not sufficient confirmation. We pair it with the snackbar
+        // check below.
         try {
             page.waitForSelector("div.T-P", new Page.WaitForSelectorOptions()
                     .setState(WaitForSelectorState.HIDDEN)
                     .setTimeout(15_000));
-            log.debug("Compose window closed — email queued for delivery to {}", to);
         } catch (Exception e) {
             throw new RuntimeException(
-                    "Compose window did not close after clicking Send — email was NOT sent to " + to +
-                    ". Gmail may be showing a validation error (check for invalid recipient address).", e);
+                    "Compose window did not close — email was NOT sent to " + to +
+                    ". Gmail may be showing a validation error.", e);
+        }
+
+        // Confirm "Message sent" snackbar appears. This distinguishes a successful send
+        // from a "Draft saved" close. The snackbar text is locale-dependent so we check
+        // for the container class (.vh) which only appears after a send action completes.
+        // We do NOT fail on timeout here — if the snackbar already faded we still trust
+        // that Ctrl+Enter with a confirmed chip sent the email.
+        try {
+            page.waitForSelector(".vh", new Page.WaitForSelectorOptions().setTimeout(5_000));
+            log.debug("Send snackbar appeared — email delivered to Gmail outbox for {}", to);
+        } catch (Exception e) {
+            log.warn("Send confirmation snackbar (.vh) not detected for {} — " +
+                    "email may have sent but snackbar faded too fast, or email went to Drafts. " +
+                    "Verify in Gmail Sent folder.", to);
         }
     }
 }
