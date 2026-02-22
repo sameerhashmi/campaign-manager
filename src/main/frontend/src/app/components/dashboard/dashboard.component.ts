@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { NavComponent } from '../shared/nav/nav.component';
 import { DashboardService } from '../../services/dashboard.service';
 import { DashboardStats } from '../../models/email-job.model';
+import { SettingsService, GmailSessionStatus } from '../../services/settings.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -30,6 +31,17 @@ import { DashboardStats } from '../../models/email-job.model';
         @if (loading) {
           <div class="loading-center"><mat-spinner></mat-spinner></div>
         } @else if (stats) {
+
+          <!-- Gmail session warning -->
+          @if (gmailStatus && !gmailStatus.connected && !gmailStatus.connecting) {
+            <div class="gmail-warning" routerLink="/settings" style="cursor:pointer">
+              <mat-icon>warning_amber</mat-icon>
+              <span>Gmail session not connected — emails will not send.
+                <strong>Go to Settings to connect.</strong>
+              </span>
+            </div>
+          }
+
           <!-- Stats Grid -->
           <div class="stats-grid">
             <mat-card class="stats-card">
@@ -77,9 +89,22 @@ import { DashboardStats } from '../../models/email-job.model';
                   <div class="stat-info">
                     <div class="stat-value">{{ stats.emailsScheduled }}</div>
                     <div class="stat-label">Scheduled</div>
-                    <div class="stat-sub">{{ stats.emailsFailed }} failed</div>
+                    <div class="stat-sub">Pending delivery</div>
                   </div>
-                  <mat-icon class="stat-icon" style="color:#ea4335">schedule</mat-icon>
+                  <mat-icon class="stat-icon" style="color:#1a73e8">schedule</mat-icon>
+                </div>
+              </mat-card-content>
+            </mat-card>
+
+            <mat-card class="stats-card">
+              <mat-card-content>
+                <div class="stat-row">
+                  <div class="stat-info">
+                    <div class="stat-value">{{ stats.emailsFailed }}</div>
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-sub">{{ stats.emailsSentToday }} sent today</div>
+                  </div>
+                  <mat-icon class="stat-icon" style="color:#ea4335">error_outline</mat-icon>
                 </div>
               </mat-card-content>
             </mat-card>
@@ -115,6 +140,13 @@ import { DashboardStats } from '../../models/email-job.model';
   `,
   styles: [`
     .loading-center { display: flex; justify-content: center; padding: 80px; }
+    .gmail-warning {
+      display: flex; align-items: center; gap: 10px;
+      background: #fff8e1; border: 1px solid #ffca28; border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 20px; color: #5d4037; font-size: 14px;
+      mat-icon { color: #f9a825; flex-shrink: 0; }
+      &:hover { background: #fff3cd; }
+    }
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -141,14 +173,22 @@ import { DashboardStats } from '../../models/email-job.model';
 })
 export class DashboardComponent implements OnInit {
   stats: DashboardStats | null = null;
+  gmailStatus: GmailSessionStatus | null = null;
   loading = true;
 
-  constructor(private dashboardService: DashboardService) {}
+  constructor(
+    private dashboardService: DashboardService,
+    private settingsService: SettingsService
+  ) {}
 
   ngOnInit(): void {
     this.dashboardService.getStats().subscribe({
       next: s => { this.stats = s; this.loading = false; },
       error: () => { this.loading = false; }
+    });
+    this.settingsService.getStatus().subscribe({
+      next: s => this.gmailStatus = s,
+      error: () => {}
     });
   }
 }

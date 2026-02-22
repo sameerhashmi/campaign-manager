@@ -2,6 +2,7 @@ package com.campaignmanager.service;
 
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,8 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Manages a persistent Gmail browser session using Playwright's storageState.
@@ -21,6 +24,9 @@ import java.time.ZoneId;
  * The user logs in once via a visible browser window (Settings page → Connect Gmail).
  * Playwright saves the session cookies/localStorage to disk. Subsequent email sends
  * reuse the saved session — no credentials are ever stored in the campaign.
+ *
+ * The connect flow is ASYNCHRONOUS: the browser opens in a background thread,
+ * and the frontend polls GET /api/settings/gmail/status to detect completion.
  */
 @Service
 @Slf4j
@@ -32,29 +38,69 @@ public class PlaywrightSessionService {
     @Value("${playwright.headless:false}")
     private boolean headless;
 
-    @Value("${playwright.gmail.timeout:30000}")
-    private int timeout;
-
     private Playwright playwright;
     private Browser browser;
     private BrowserContext sessionContext;
 
-    /**
-     * Opens a visible (non-headless) browser for the user to log into Gmail.
-     * Waits up to 90 seconds for a successful login, then saves the session.
-     * Throws an exception if login is not detected within the timeout.
-     */
-    public synchronized void connectSession() throws Exception {
-        log.info("Starting Gmail session setup — opening browser for user login");
+    // Async connect state
+    private final AtomicBoolean connecting = new AtomicBoolean(false);
+    private final AtomicReference<String> connectError = new AtomicReference<>(null);
 
-        // Ensure data directory exists
+    /** Pre-warms Playwright at startup so browser binaries are ready before any HTTP request. */
+    @PostConstruct
+    public synchronized void initialize() {
+        log.info("Playwright: initializing and verifying browser binaries...");
+        try {
+            if (playwright == null) {
+                playwright = Playwright.create();
+            }
+            log.info("Playwright: browser binaries ready.");
+        } catch (Exception e) {
+            log.warn("Playwright: initialization warning: {}", e.getMessage());
+        }
+    }
+
+    // ─── Async Connect ────────────────────────────────────────────────────────
+
+    /** @return true while a connect-browser session is in progress */
+    public boolean isConnecting() { return connecting.get(); }
+
+    /** @return error message from the most recent failed connect attempt, or null */
+    public String getConnectError() { return connectError.get(); }
+
+    /**
+     * Starts the Gmail session setup asynchronously.
+     * Opens a visible browser window in a background thread; the frontend polls
+     * {@code GET /api/settings/gmail/status} to detect when login completes.
+     * Safe to call multiple times — ignored if a connect is already in progress.
+     */
+    public void startConnectSession() {
+        if (connecting.compareAndSet(false, true)) {
+            connectError.set(null);
+            Thread thread = new Thread(() -> {
+                try {
+                    doConnectSession();
+                } catch (Exception e) {
+                    log.error("Gmail session setup failed: {}", e.getMessage());
+                    connectError.set(e.getMessage());
+                } finally {
+                    connecting.set(false);
+                }
+            }, "playwright-connect");
+            thread.setDaemon(true);
+            thread.start();
+        }
+    }
+
+    /** Actual blocking connect logic, runs in the background thread. */
+    private void doConnectSession() throws Exception {
+        log.info("Starting Gmail session setup — opening browser for user login");
         Files.createDirectories(Paths.get(SESSION_DIR));
 
-        if (playwright == null) {
-            playwright = Playwright.create();
+        synchronized (this) {
+            if (playwright == null) playwright = Playwright.create();
         }
 
-        // Always launch non-headless so the user can interact
         Browser connectBrowser = playwright.chromium().launch(
                 new BrowserType.LaunchOptions().setHeadless(false)
         );
@@ -64,16 +110,26 @@ public class PlaywrightSessionService {
         );
 
         Page page = context.newPage();
-        page.setDefaultTimeout(90_000);
+        page.setDefaultTimeout(120_000);
 
         try {
             page.navigate("https://mail.google.com/mail/u/0/");
-            log.info("Navigated to Gmail — waiting for user to log in (up to 90 seconds)...");
+            log.info("Browser open — waiting for Gmail login (up to 2 minutes)...");
 
-            // Wait until we land on the Gmail inbox (not the accounts.google.com login page)
-            page.waitForURL(url -> url.contains("mail.google.com") && !url.contains("accounts.google.com"),
-                    new Page.WaitForURLOptions().setTimeout(90_000));
-            page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(30_000));
+            try {
+                page.waitForURL(
+                        url -> url.contains("mail.google.com") && !url.contains("accounts.google.com"),
+                        new Page.WaitForURLOptions().setTimeout(120_000)
+                );
+            } catch (Exception e) {
+                String msg = e.getMessage() != null && e.getMessage().contains("closed")
+                        ? "Browser window was closed before login completed. Click 'Connect Gmail' and complete login without closing the browser."
+                        : "Login timed out (2 minutes). Click 'Connect Gmail' again and log in promptly.";
+                throw new Exception(msg);
+            }
+
+            page.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(30_000));
 
             log.info("Gmail login detected — saving session state");
             Path sessionPath = getSessionPath();
@@ -81,14 +137,14 @@ public class PlaywrightSessionService {
             log.info("Session saved to: {}", sessionPath.toAbsolutePath());
 
         } finally {
-            try { page.close(); } catch (Exception ignored) {}
-            try { context.close(); } catch (Exception ignored) {}
+            try { page.close(); }         catch (Exception ignored) {}
+            try { context.close(); }      catch (Exception ignored) {}
             try { connectBrowser.close(); } catch (Exception ignored) {}
-
-            // Invalidate cached session context so next send reloads the new state
             invalidateCachedContext();
         }
     }
+
+    // ─── Session Status ───────────────────────────────────────────────────────
 
     /** Returns true if a saved session file exists on disk. */
     public boolean isSessionActive() {
@@ -117,22 +173,22 @@ public class PlaywrightSessionService {
         }
     }
 
+    // ─── Send-time Context ────────────────────────────────────────────────────
+
     /**
-     * Returns a BrowserContext loaded with the saved session state.
-     * The context is cached and reused across multiple send operations.
-     * If the session file has been updated, the context is refreshed.
+     * Returns a BrowserContext loaded with the saved session for sending emails.
+     * The context is cached and reused across sends.
      *
      * @throws IllegalStateException if no session has been established
      */
     public synchronized BrowserContext getSessionContext() {
         if (!isSessionActive()) {
             throw new IllegalStateException(
-                    "No Gmail session found. Go to Settings → Connect Gmail to establish a session first.");
+                    "No Gmail session found. Go to Settings → Connect Gmail first.");
         }
 
-        if (playwright == null) {
-            playwright = Playwright.create();
-        }
+        if (playwright == null) playwright = Playwright.create();
+
         if (browser == null || !browser.isConnected()) {
             browser = playwright.chromium().launch(
                     new BrowserType.LaunchOptions().setHeadless(headless)
@@ -150,7 +206,7 @@ public class PlaywrightSessionService {
         return sessionContext;
     }
 
-    /** Closes and nullifies the cached BrowserContext so it will be recreated next call. */
+    /** Closes the cached BrowserContext so it will be recreated on the next send. */
     public synchronized void invalidateCachedContext() {
         if (sessionContext != null) {
             try { sessionContext.close(); } catch (Exception ignored) {}

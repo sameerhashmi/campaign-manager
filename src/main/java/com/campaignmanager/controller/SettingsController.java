@@ -16,36 +16,29 @@ public class SettingsController {
     private final PlaywrightSessionService sessionService;
 
     /**
-     * Returns the current Gmail session status.
+     * Returns current Gmail session status.
+     * The frontend polls this endpoint every few seconds while connecting.
      */
     @GetMapping("/gmail/status")
     public GmailSessionStatusDto getStatus() {
-        GmailSessionStatusDto dto = new GmailSessionStatusDto();
-        dto.setConnected(sessionService.isSessionActive());
-        dto.setSessionCreatedAt(sessionService.getSessionCreatedAt());
-        dto.setMessage(dto.isConnected()
-                ? "Gmail session is active. Emails will be sent using the saved session."
-                : "No Gmail session. Click 'Connect Gmail' to log in.");
-        return dto;
+        return buildStatus();
     }
 
     /**
-     * Opens a visible browser window so the user can log into Gmail.
-     * Waits up to 90 seconds for login, then saves the session.
-     * This is a long-running request — the frontend should use a 120-second timeout.
+     * Starts the Gmail session setup asynchronously.
+     * Opens a browser in a background thread — returns immediately (202 Accepted).
+     * The frontend polls GET /status to detect completion.
      */
     @PostMapping("/gmail/connect")
     public ResponseEntity<GmailSessionStatusDto> connect() {
-        try {
-            sessionService.connectSession();
-            return ResponseEntity.ok(getStatus());
-        } catch (Exception e) {
-            log.error("Gmail session setup failed: {}", e.getMessage());
-            GmailSessionStatusDto dto = new GmailSessionStatusDto();
-            dto.setConnected(false);
-            dto.setMessage("Failed to establish Gmail session: " + e.getMessage());
-            return ResponseEntity.internalServerError().body(dto);
+        if (sessionService.isConnecting()) {
+            return ResponseEntity.accepted().body(buildStatus());
         }
+        sessionService.startConnectSession();
+        GmailSessionStatusDto dto = buildStatus();
+        dto.setConnecting(true);
+        dto.setMessage("Browser window opened — please log into Gmail. This page will update automatically.");
+        return ResponseEntity.accepted().body(dto);
     }
 
     /**
@@ -66,5 +59,24 @@ public class SettingsController {
             dto.setMessage("Disconnect failed: " + e.getMessage());
             return ResponseEntity.internalServerError().body(dto);
         }
+    }
+
+    private GmailSessionStatusDto buildStatus() {
+        GmailSessionStatusDto dto = new GmailSessionStatusDto();
+        dto.setConnected(sessionService.isSessionActive());
+        dto.setConnecting(sessionService.isConnecting());
+        dto.setConnectError(sessionService.getConnectError());
+        dto.setSessionCreatedAt(sessionService.getSessionCreatedAt());
+
+        if (dto.isConnecting()) {
+            dto.setMessage("Browser is open — please log into Gmail. Do not close the browser window.");
+        } else if (dto.getConnectError() != null) {
+            dto.setMessage("Last attempt failed: " + dto.getConnectError());
+        } else if (dto.isConnected()) {
+            dto.setMessage("Gmail session is active. Emails will be sent using the saved session.");
+        } else {
+            dto.setMessage("No Gmail session. Click 'Connect Gmail' to log in.");
+        }
+        return dto;
     }
 }

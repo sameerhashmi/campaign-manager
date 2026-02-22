@@ -7,6 +7,8 @@ import java.time.LocalDateTime;
 @Data
 public class GmailSessionStatusDto {
     private boolean connected;
+    private boolean connecting;   // true while browser is open waiting for login
+    private String connectError;  // last error from a failed connect attempt
     private LocalDateTime sessionCreatedAt;
     private String message;
 }

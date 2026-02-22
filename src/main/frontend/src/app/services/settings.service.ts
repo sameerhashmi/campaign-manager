@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 
 export interface GmailSessionStatus {
   connected: boolean;
+  connecting: boolean;
+  connectError: string | null;
   sessionCreatedAt: string | null;
   message: string;
 }
@@ -18,11 +20,9 @@ export class SettingsService {
     return this.http.get<GmailSessionStatus>(`${this.base}/gmail/status`);
   }
 
-  /** Long-running request (up to 90s) — opens a browser for the user to log in. */
+  /** Triggers async browser open — returns immediately (202). Frontend polls status. */
   connectGmail(): Observable<GmailSessionStatus> {
-    return this.http.post<GmailSessionStatus>(`${this.base}/gmail/connect`, null, {
-      // Angular's HttpClient default timeout is no timeout; backend waits up to 90s
-    });
+    return this.http.post<GmailSessionStatus>(`${this.base}/gmail/connect`, null);
   }
 
   disconnectGmail(): Observable<GmailSessionStatus> {
