@@ -5,13 +5,10 @@ applications:
   random-route: true
   path: dist
   buildpacks:
-    - https://github.com/cloudfoundry/apt-buildpack
     - java_buildpack_offline
   env:
     JBP_CONFIG_SPRING_AUTO_RECONFIGURATION: '{enabled: false}'
     JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 17.+ } }'
-    # Explicitly tell the Java buildpack which JAR to run
-    JBP_CONFIG_EXECUTABLE_JAR: '{ jar_path: campaign-manager-1.0.0.jar }'
     SPRING_PROFILES_ACTIVE: cloud
     # Force Playwright to run headless in PCF (no display server available)
     PLAYWRIGHT_HEADLESS: 'true'

@@ -14,8 +14,13 @@ mkdir -p dist
 # Copy the fat JAR
 cp target/campaign-manager-1.0.0.jar dist/
 
-# Copy the apt.yml so the apt-buildpack can install Chromium system libraries
-cp apt.yml dist/
+# Add .profile.d startup script that installs Playwright system libs at runtime.
+# Uses apt-get download (no root required) + dpkg-deb -x (no root required).
+# This avoids the need for apt-buildpack as a supply buildpack, which breaks
+# java_buildpack_offline's container detection in multi-buildpack mode.
+mkdir -p dist/.profile.d
+cp scripts/playwright-deps.sh dist/.profile.d/
+chmod +x dist/.profile.d/playwright-deps.sh
 
 echo "==> Pushing to Cloud Foundry..."
 cf push
