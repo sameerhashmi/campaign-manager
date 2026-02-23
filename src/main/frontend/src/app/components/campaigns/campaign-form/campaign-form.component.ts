@@ -46,6 +46,12 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
                 <textarea matInput formControlName="description" rows="2"></textarea>
               </mat-form-field>
 
+              <mat-form-field appearance="outline">
+                <mat-label>Tanzu Contact (optional)</mat-label>
+                <input matInput formControlName="tanzuContact" placeholder="e.g. Jane Smith">
+                <mat-hint>Internal VMware/Tanzu contact associated with this campaign</mat-hint>
+              </mat-form-field>
+
               <div class="session-notice">
                 <mat-icon class="notice-icon">info</mat-icon>
                 <span>
@@ -179,7 +185,8 @@ export class CampaignFormComponent implements OnInit {
     this.form = this.fb.group({
       name: ['', Validators.required],
       description: [''],
-      gmailEmail: ['']
+      gmailEmail: [''],
+      tanzuContact: ['']
     });
   }
 
@@ -191,7 +198,8 @@ export class CampaignFormComponent implements OnInit {
         this.form.patchValue({
           name: c.name,
           description: c.description,
-          gmailEmail: c.gmailEmail
+          gmailEmail: c.gmailEmail,
+          tanzuContact: c.tanzuContact
         });
       });
     }

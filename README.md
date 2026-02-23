@@ -163,6 +163,92 @@ Open: **http://localhost:4200** — Angular dev server with live reload.
 
 ---
 
+## Deploying to Pivotal Cloud Foundry / Tanzu Application Service
+
+### Prerequisites
+
+- CF CLI installed and authenticated (`cf login`)
+- Target org and space selected (`cf target -o <org> -s <space>`)
+- `apt-buildpack` available in your marketplace — verify with `cf buildpacks`
+
+### Deploy
+
+```bash
+./cf-push.sh
+```
+
+This script builds the JAR, assembles a `dist/` folder containing the JAR and `apt.yml`, then runs `cf push`.
+
+### What the manifest configures
+
+| Setting | Value | Reason |
+|---------|-------|--------|
+| `memory` | 2G | Chromium needs more memory than a standard Java app |
+| `buildpacks` | `apt-buildpack` → `java_buildpack_offline` | `apt-buildpack` installs Chromium system libraries during staging |
+| `PLAYWRIGHT_HEADLESS` | `true` | PCF containers have no display server |
+| `PLAYWRIGHT_BROWSERS_PATH` | `/home/vcap/playwright-browsers` | Path for downloaded browser binaries |
+
+### Connecting Gmail in PCF
+
+PCF containers are headless — the **Connect Gmail** button cannot open a visible browser window in PCF. Use this two-step workaround:
+
+**Step 1 — Generate the session locally:**
+```bash
+java -jar target/campaign-manager-1.0.0.jar
+# Go to http://localhost:8080 → Settings → Connect Gmail
+# Log in to Gmail in the browser window
+# Session is saved to: ./data/gmail-session.json
+```
+
+**Step 2 — Upload the session file to your PCF app:**
+
+Option A (REST endpoint — recommended):
+```bash
+# Get a JWT token first
+TOKEN=$(curl -s -X POST https://<your-app>.cfapps.io/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
+
+# Upload the session file
+curl -X POST https://<your-app>.cfapps.io/api/settings/gmail/upload-session \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@./data/gmail-session.json"
+```
+
+Option B (CF SSH):
+```bash
+cf ssh sh-campaign-manager -c 'mkdir -p /home/vcap/app/data'
+cat ./data/gmail-session.json | cf ssh sh-campaign-manager \
+  -c 'cat > /home/vcap/app/data/gmail-session.json'
+```
+
+### Known PCF limitations
+
+| Issue | Impact | Recommendation |
+|-------|--------|----------------|
+| **Ephemeral containers** | H2 database and Gmail session are wiped on restart/restage | Bind a MySQL/PostgreSQL service; re-upload session after restart |
+| **No display server** | "Connect Gmail" cannot open a browser in PCF | Use the session upload workaround above |
+| **Browser binary download** | Playwright downloads ~120 MB of Chromium on first boot | Allow ~60 s for first startup; subsequent starts are faster |
+
+### Binding a persistent database (recommended for production)
+
+```bash
+# Create a MySQL service (tile name varies by TAS foundation)
+cf create-service p.mysql db-small campaign-db
+cf bind-service sh-campaign-manager campaign-db
+cf restage sh-campaign-manager
+```
+
+Then add `src/main/resources/application-cloud.properties`:
+```properties
+spring.datasource.url=${vcap.services.campaign-db.credentials.jdbcUrl}
+spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect
+spring.jpa.hibernate.ddl-auto=update
+spring.h2.console.enabled=false
+```
+
+---
+
 ## Project Structure
 
 ```

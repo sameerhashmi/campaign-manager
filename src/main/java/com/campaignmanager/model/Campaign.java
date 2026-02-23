@@ -29,6 +29,10 @@ public class Campaign {
     @Column(name = "gmail_email")
     private String gmailEmail;
 
+    /** Internal VMware/Tanzu contact associated with this campaign. */
+    @Column(name = "tanzu_contact")
+    private String tanzuContact;
+
     /**
      * Retained for database compatibility. Each email template now carries
      * its own {@code scheduled_at} datetime; this field is no longer used.

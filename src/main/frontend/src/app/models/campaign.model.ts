@@ -3,6 +3,7 @@ export interface Campaign {
   name: string;
   description?: string;
   gmailEmail: string;
+  tanzuContact?: string;
   status?: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
   createdAt?: string;
   launchedAt?: string;

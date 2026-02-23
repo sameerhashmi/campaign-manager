@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -8,7 +8,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatTableModule } from '@angular/material/table';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatSortModule, MatSort } from '@angular/material/sort';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -28,7 +29,7 @@ import { EmailJobService } from '../../../services/email-job.service';
   imports: [
     CommonModule, RouterLink, ReactiveFormsModule,
     MatTabsModule, MatCardModule, MatButtonModule, MatIconModule,
-    MatFormFieldModule, MatInputModule, MatTableModule, MatChipsModule,
+    MatFormFieldModule, MatInputModule, MatTableModule, MatSortModule, MatChipsModule,
     MatSnackBarModule, MatProgressSpinnerModule, MatCheckboxModule,
     MatTooltipModule, NavComponent
   ],
@@ -70,7 +71,9 @@ import { EmailJobService } from '../../../services/email-job.service';
                   <mat-card-header><mat-card-title>Campaign Settings</mat-card-title></mat-card-header>
                   <mat-card-content>
                     <div class="detail-grid">
-                      <div class="detail-row"><span class="label">Gmail Account</span><span>{{ campaign.gmailEmail }}</span></div>
+                      @if (campaign.tanzuContact) {
+                        <div class="detail-row"><span class="label">Tanzu Contact</span><span>{{ campaign.tanzuContact }}</span></div>
+                      }
                       <div class="detail-row"><span class="label">Contacts</span><span>{{ campaign.contactCount }}</span></div>
                       <div class="detail-row"><span class="label">Created</span><span>{{ campaign.createdAt | date:'medium' }}</span></div>
                       @if (campaign.launchedAt) {
@@ -263,34 +266,34 @@ import { EmailJobService } from '../../../services/email-job.service';
             </mat-tab>
 
             <!-- TAB 4: Email Jobs -->
-            <mat-tab label="Email Jobs ({{ jobs.length }})">
+            <mat-tab label="Email Jobs ({{ jobsDataSource.data.length }})">
               <div class="tab-content">
-                <table mat-table [dataSource]="jobs" class="full-table">
+                <table mat-table [dataSource]="jobsDataSource" matSort class="full-table">
                   <ng-container matColumnDef="contact">
-                    <th mat-header-cell *matHeaderCellDef>Contact</th>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header="contactName">Contact</th>
                     <td mat-cell *matCellDef="let j">
                       <strong>{{ j.contactName }}</strong>
                       <div class="cell-sub">{{ j.contactEmail }}</div>
                     </td>
                   </ng-container>
                   <ng-container matColumnDef="step">
-                    <th mat-header-cell *matHeaderCellDef>Step</th>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header="stepNumber">Step</th>
                     <td mat-cell *matCellDef="let j">{{ j.stepNumber }}</td>
                   </ng-container>
                   <ng-container matColumnDef="subject">
-                    <th mat-header-cell *matHeaderCellDef>Subject</th>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header="subject">Subject</th>
                     <td mat-cell *matCellDef="let j">{{ j.subject }}</td>
                   </ng-container>
                   <ng-container matColumnDef="scheduledAt">
-                    <th mat-header-cell *matHeaderCellDef>Scheduled</th>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header="scheduledAt">Scheduled</th>
                     <td mat-cell *matCellDef="let j">{{ j.scheduledAt | date:'medium' }}</td>
                   </ng-container>
                   <ng-container matColumnDef="sentAt">
-                    <th mat-header-cell *matHeaderCellDef>Sent At</th>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header="sentAt">Sent At</th>
                     <td mat-cell *matCellDef="let j">{{ j.sentAt ? (j.sentAt | date:'medium') : '—' }}</td>
                   </ng-container>
                   <ng-container matColumnDef="status">
-                    <th mat-header-cell *matHeaderCellDef>Status</th>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header="status">Status</th>
                     <td mat-cell *matCellDef="let j">
                       <span class="status-chip {{ j.status.toLowerCase() }}">{{ j.status }}</span>
                     </td>
@@ -314,7 +317,7 @@ import { EmailJobService } from '../../../services/email-job.service';
                   <tr mat-row *matRowDef="let row; columns: jobColumns;"></tr>
                 </table>
 
-                @if (jobs.length === 0) {
+                @if (jobsDataSource.data.length === 0) {
                   <div class="empty-state">
                     <mat-icon>inbox</mat-icon>
                     <p>No email jobs yet. Launch the campaign to generate jobs.</p>
@@ -385,13 +388,15 @@ import { EmailJobService } from '../../../services/email-job.service';
     }
   `]
 })
-export class CampaignDetailComponent implements OnInit {
+export class CampaignDetailComponent implements OnInit, AfterViewInit {
   campaign: Campaign | null = null;
   templates: EmailTemplate[] = [];
   enrolledContacts: Contact[] = [];
   availableContacts: Contact[] = [];
-  jobs: EmailJob[] = [];
+  jobsDataSource = new MatTableDataSource<EmailJob>();
   loading = true;
+
+  @ViewChild(MatSort) sort!: MatSort;
 
   // Token display strings (avoids Angular treating {{...}} as bindings)
   readonly tokenName = '{{name}}';
@@ -432,6 +437,17 @@ export class CampaignDetailComponent implements OnInit {
     this.load(id);
   }
 
+  ngAfterViewInit(): void {
+    this.jobsDataSource.sortingDataAccessor = (item: EmailJob, property: string) => {
+      switch (property) {
+        case 'scheduledAt': return item.scheduledAt ?? '';
+        case 'sentAt': return item.sentAt ?? '';
+        default: return (item as any)[property] ?? '';
+      }
+    };
+    this.jobsDataSource.sort = this.sort;
+  }
+
   load(id: number): void {
     this.loading = true;
     this.campaignService.getById(id).subscribe(c => {
@@ -440,7 +456,9 @@ export class CampaignDetailComponent implements OnInit {
     });
     this.campaignService.getTemplates(id).subscribe(t => this.templates = t);
     this.campaignService.getContacts(id).subscribe(c => this.enrolledContacts = c);
-    this.campaignService.getJobs(id).subscribe(j => this.jobs = j);
+    this.campaignService.getJobs(id).subscribe(j => {
+      this.jobsDataSource.data = j;
+    });
     this.contactService.getAll().subscribe(all => {
       this.availableContacts = all.filter(c => !this.enrolledContacts.some(e => e.id === c.id));
     });
@@ -550,7 +568,9 @@ export class CampaignDetailComponent implements OnInit {
     this.emailJobService.retry(job.id).subscribe({
       next: () => {
         this.snackBar.open('Job scheduled for retry', '', { duration: 3000 });
-        this.campaignService.getJobs(this.campaignId).subscribe(j => this.jobs = j);
+        this.campaignService.getJobs(this.campaignId).subscribe(j => {
+          this.jobsDataSource.data = j;
+        });
       }
     });
   }

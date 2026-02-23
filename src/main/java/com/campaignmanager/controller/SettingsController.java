@@ -6,6 +6,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @RestController
 @RequestMapping("/api/settings")
@@ -57,6 +61,40 @@ public class SettingsController {
             GmailSessionStatusDto dto = new GmailSessionStatusDto();
             dto.setConnected(false);
             dto.setMessage("Disconnect failed: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(dto);
+        }
+    }
+
+    /**
+     * Accepts an uploaded gmail-session.json file (exported from a local machine where
+     * Gmail login was completed). This is the only way to establish a Gmail session
+     * in a headless/cloud environment where a visible browser cannot be opened.
+     *
+     * Usage: cf curl /api/settings/gmail/upload-session -X POST -F "file=@./data/gmail-session.json"
+     * Or use the Settings page upload button.
+     */
+    @PostMapping("/gmail/upload-session")
+    public ResponseEntity<GmailSessionStatusDto> uploadSession(@RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            GmailSessionStatusDto dto = new GmailSessionStatusDto();
+            dto.setConnected(false);
+            dto.setMessage("Uploaded file is empty.");
+            return ResponseEntity.badRequest().body(dto);
+        }
+        try {
+            Path sessionPath = sessionService.getSessionPath();
+            Files.createDirectories(sessionPath.getParent());
+            file.transferTo(sessionPath.toFile());
+            sessionService.invalidateCachedContext();
+            log.info("Gmail session uploaded via file upload ({} bytes)", file.getSize());
+            GmailSessionStatusDto dto = buildStatus();
+            dto.setMessage("Session file uploaded successfully. Gmail is now connected.");
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            log.error("Session file upload failed: {}", e.getMessage());
+            GmailSessionStatusDto dto = new GmailSessionStatusDto();
+            dto.setConnected(false);
+            dto.setMessage("Upload failed: " + e.getMessage());
             return ResponseEntity.internalServerError().body(dto);
         }
     }
