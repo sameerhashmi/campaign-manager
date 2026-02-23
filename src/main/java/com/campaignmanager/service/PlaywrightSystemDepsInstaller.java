@@ -45,10 +45,14 @@ public class PlaywrightSystemDepsInstaller {
             "libgbm1", "libxkbcommon0", "libasound2",
             "libdrm2", "libpango-1.0-0", "libcairo2",
             "libxfixes3", "libxi6", "libxrender1", "libxtst6",
-            // transitive deps of the above
+            // transitive deps (identified iteratively from CF startup validation warnings)
             "libavahi-common3", "libavahi-client3",  // required by libcups2
             "libwayland-server0",                     // required by libgbm1
-            "libxcb-randr0"                           // required by libxrandr2
+            "libxcb-randr0",                          // required by libxrandr2
+            "libx11-xcb1", "libxcursor1",             // required by Chromium X11/XCB layer
+            "libgtk-3-0",                             // required by Chromium UI layer
+            "libepoxy0", "libxinerama1",              // required by libgtk-3-0
+            "libwayland-cursor0", "libwayland-egl1", "libwayland-client0" // required by libgtk-3-0
     );
 
     /** True when running in a Cloud Foundry container. */
