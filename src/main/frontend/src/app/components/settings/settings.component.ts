@@ -89,6 +89,10 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           <mat-divider></mat-divider>
 
           <mat-card-actions>
+            <!-- Hidden file picker — triggered by the upload button -->
+            <input #fileInput type="file" accept=".json" style="display:none"
+                   (change)="onFileSelected($event)">
+
             @if (!status?.connecting) {
               @if (!status?.connected) {
                 <button mat-raised-button color="primary" (click)="connect()">
@@ -105,6 +109,11 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                   Disconnect
                 </button>
               }
+              <button mat-stroked-button color="accent" (click)="fileInput.click()"
+                      [disabled]="uploading" style="margin-left:8px">
+                <mat-icon>upload_file</mat-icon>
+                {{ uploading ? 'Uploading…' : 'Upload Session File' }}
+              </button>
             }
           </mat-card-actions>
         </mat-card>
@@ -115,12 +124,21 @@ import { switchMap, takeWhile } from 'rxjs/operators';
             <mat-card-title>How Gmail Session Works</mat-card-title>
           </mat-card-header>
           <mat-card-content>
+            <p class="section-heading">Running locally (normal setup)</p>
             <ol class="steps-list">
               <li>Click <strong>Connect Gmail</strong> — a Chrome browser window opens on your computer.</li>
               <li>Log into your Gmail account in that window (including any 2-step verification).</li>
               <li>Once you reach the Gmail inbox, the session is saved and the browser closes automatically.</li>
               <li>Playwright reuses the saved session to send emails — no username or password stored in the app.</li>
               <li>If the session expires later, click <strong>Re-connect Gmail</strong>.</li>
+            </ol>
+            <p class="section-heading" style="margin-top:16px">Running in a headless / cloud environment (e.g. Cloud Foundry)</p>
+            <ol class="steps-list">
+              <li>Run the app <strong>locally</strong> on your laptop: <code>java -jar campaign-manager-1.0.0.jar</code></li>
+              <li>Go to <strong>http://localhost:8080 → Settings → Connect Gmail</strong> and log in.</li>
+              <li>The session file is saved to <code>./data/gmail-session.json</code> in the directory where you ran the JAR.</li>
+              <li>Come back to <strong>this Settings page</strong> on the cloud app and click <strong>Upload Session File</strong>.</li>
+              <li>Pick the <code>gmail-session.json</code> file — done.</li>
             </ol>
           </mat-card-content>
         </mat-card>
@@ -159,11 +177,14 @@ import { switchMap, takeWhile } from 'rxjs/operators';
     }
     mat-card-actions { padding: 8px 16px 12px; display: flex; align-items: center; }
     .steps-list { margin: 0; padding-left: 20px; line-height: 2; color: #3c4043; }
+    .section-heading { font-weight: 600; font-size: 13px; color: #3c4043; margin: 0 0 4px; }
+    code { background: #f1f3f4; border-radius: 3px; padding: 1px 5px; font-size: 12px; }
   `]
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   status: GmailSessionStatus | null = null;
   loading = true;
+  uploading = false;
   private pollSub?: Subscription;
 
   constructor(
@@ -206,6 +227,28 @@ export class SettingsComponent implements OnInit, OnDestroy {
         this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });
+  }
+
+  onFileSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this.uploading = true;
+    this.settingsService.uploadSession(file).subscribe({
+      next: s => {
+        this.status = s;
+        this.uploading = false;
+        this.snackBar.open('Session file uploaded — Gmail is now connected!', '', {
+          duration: 5000, panelClass: 'snack-success'
+        });
+      },
+      error: (err) => {
+        this.uploading = false;
+        const msg = err?.error?.message ?? 'Upload failed. Make sure the file is a valid gmail-session.json.';
+        this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
+      }
+    });
+    // Reset the input so the same file can be re-uploaded if needed
+    (event.target as HTMLInputElement).value = '';
   }
 
   disconnect(): void {
