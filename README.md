@@ -204,37 +204,34 @@ This runs once on first boot and is skipped on subsequent boots (marker file `.i
 
 ### Connecting Gmail in PCF
 
-PCF containers are headless — the **Connect Gmail** button cannot open a visible browser window in PCF. Use this two-step workaround:
+PCF containers are headless — the **Connect Gmail** button cannot open a visible browser window and will return an error if clicked. Use the **Upload Session File** button on the Settings page instead:
 
 **Step 1 — Generate the session locally:**
-```bash
-java -jar target/campaign-manager-1.0.0.jar
-# Go to http://localhost:8080 → Settings → Connect Gmail
-# Log in to Gmail in the browser window
-# Session is saved to: ./data/gmail-session.json
-```
 
-**Step 2 — Upload the session file to your PCF app:**
+1. Run the app on your laptop: `java -jar target/campaign-manager-1.0.0.jar`
+2. Open **http://localhost:8080 → Settings → Connect Gmail**
+3. Log in to Gmail in the Chrome window that opens
+4. The session is saved to **`./data/gmail-session.json`** in the directory you ran the JAR from (project root by default)
 
-Option A (REST endpoint — recommended):
+**Step 2 — Upload the session file via the Settings UI:**
+
+1. Open your PCF app in the browser → **Settings**
+2. Click **Upload Session File**
+3. Pick the `gmail-session.json` file from your local `./data/` folder
+4. The status updates to **Connected** — done
+
+**Alternative: upload via curl**
 ```bash
-# Get a JWT token first
 TOKEN=$(curl -s -X POST https://<your-app>.cfapps.io/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
 
-# Upload the session file
 curl -X POST https://<your-app>.cfapps.io/api/settings/gmail/upload-session \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@./data/gmail-session.json"
 ```
 
-Option B (CF SSH):
-```bash
-cf ssh sh-campaign-manager -c 'mkdir -p /home/vcap/app/data'
-cat ./data/gmail-session.json | cf ssh sh-campaign-manager \
-  -c 'cat > /home/vcap/app/data/gmail-session.json'
-```
+> **Note:** The Gmail session file is stored in the container's ephemeral filesystem. It will be lost on app restart or restage — you will need to re-upload it each time.
 
 ### Known PCF limitations
 
