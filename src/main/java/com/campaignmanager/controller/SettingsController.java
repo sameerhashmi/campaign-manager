@@ -2,6 +2,7 @@ package com.campaignmanager.controller;
 
 import com.campaignmanager.dto.GmailSessionStatusDto;
 import com.campaignmanager.service.PlaywrightSessionService;
+import com.campaignmanager.service.PlaywrightSystemDepsInstaller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import java.nio.file.StandardCopyOption;
 public class SettingsController {
 
     private final PlaywrightSessionService sessionService;
+    private final PlaywrightSystemDepsInstaller systemDepsInstaller;
 
     /**
      * Returns current Gmail session status.
@@ -33,9 +35,18 @@ public class SettingsController {
      * Starts the Gmail session setup asynchronously.
      * Opens a browser in a background thread — returns immediately (202 Accepted).
      * The frontend polls GET /status to detect completion.
+     *
+     * Not available in headless/cloud environments (no display server). In those
+     * environments the user must upload a gmail-session.json via the upload endpoint.
      */
     @PostMapping("/gmail/connect")
     public ResponseEntity<GmailSessionStatusDto> connect() {
+        if (systemDepsInstaller.isCloudFoundry()) {
+            GmailSessionStatusDto dto = buildStatus();
+            dto.setMessage("Connect Gmail is not available in this environment — no display server. " +
+                    "Generate a gmail-session.json locally and upload it using the 'Upload Session File' button below.");
+            return ResponseEntity.badRequest().body(dto);
+        }
         if (sessionService.isConnecting()) {
             return ResponseEntity.ok(buildStatus());
         }

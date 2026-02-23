@@ -199,10 +199,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
           this.startPolling();
         }
       },
-      error: () => {
-        this.snackBar.open('Could not start browser. Check that the app is running.', 'Close', {
-          duration: 5000, panelClass: 'snack-error'
-        });
+      error: (err) => {
+        const msg: string = err?.error?.message
+          ?? 'Could not start browser. Check that the app is running.';
+        if (err?.error) { this.status = { ...this.status!, message: msg }; }
+        this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });
   }
