@@ -4,6 +4,7 @@ import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.LoadState;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
@@ -16,6 +17,9 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -31,11 +35,14 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Service
 @DependsOn("playwrightSystemDepsInstaller")
+@RequiredArgsConstructor
 @Slf4j
 public class PlaywrightSessionService {
 
     private static final String SESSION_DIR = "./data";
     private static final String SESSION_FILE = "gmail-session.json";
+
+    private final PlaywrightSystemDepsInstaller systemDepsInstaller;
 
     @Value("${playwright.headless:false}")
     private boolean headless;
@@ -48,13 +55,41 @@ public class PlaywrightSessionService {
     private final AtomicBoolean connecting = new AtomicBoolean(false);
     private final AtomicReference<String> connectError = new AtomicReference<>(null);
 
+    /**
+     * Creates a Playwright instance with LD_LIBRARY_PATH injected via CreateOptions.setEnv()
+     * when running on CF (so the Node.js driver and Chromium pick up the extracted system libs).
+     * On local dev, systemDepsInstaller.getLibraryPath() returns null and we use plain create().
+     */
+    private Playwright createPlaywright() {
+        String libPath = systemDepsInstaller.getLibraryPath();
+        if (libPath != null) {
+            Map<String, String> env = new HashMap<>(System.getenv());
+            env.put("LD_LIBRARY_PATH", libPath);
+            log.info("Playwright: creating with CF LD_LIBRARY_PATH={}", libPath);
+            return Playwright.create(new Playwright.CreateOptions().setEnv(env));
+        }
+        return Playwright.create();
+    }
+
+    /**
+     * Returns Chromium launch options.  On CF, adds --no-sandbox because CF containers
+     * do not expose kernel user namespaces required by Chrome's process sandbox.
+     */
+    private BrowserType.LaunchOptions launchOptions(boolean headless) {
+        BrowserType.LaunchOptions opts = new BrowserType.LaunchOptions().setHeadless(headless);
+        if (systemDepsInstaller.isCloudFoundry()) {
+            opts.setArgs(List.of("--no-sandbox", "--disable-setuid-sandbox"));
+        }
+        return opts;
+    }
+
     /** Pre-warms Playwright at startup so browser binaries are ready before any HTTP request. */
     @PostConstruct
     public synchronized void initialize() {
         log.info("Playwright: initializing and verifying browser binaries...");
         try {
             if (playwright == null) {
-                playwright = Playwright.create();
+                playwright = createPlaywright();
             }
             log.info("Playwright: browser binaries ready.");
         } catch (Exception e) {
@@ -100,12 +135,10 @@ public class PlaywrightSessionService {
         Files.createDirectories(Paths.get(SESSION_DIR));
 
         synchronized (this) {
-            if (playwright == null) playwright = Playwright.create();
+            if (playwright == null) playwright = createPlaywright();
         }
 
-        Browser connectBrowser = playwright.chromium().launch(
-                new BrowserType.LaunchOptions().setHeadless(false)
-        );
+        Browser connectBrowser = playwright.chromium().launch(launchOptions(false));
 
         BrowserContext context = connectBrowser.newContext(
                 new Browser.NewContextOptions().setViewportSize(1280, 900)
@@ -195,12 +228,10 @@ public class PlaywrightSessionService {
                     "No Gmail session found. Go to Settings → Connect Gmail first.");
         }
 
-        if (playwright == null) playwright = Playwright.create();
+        if (playwright == null) playwright = createPlaywright();
 
         if (browser == null || !browser.isConnected()) {
-            browser = playwright.chromium().launch(
-                    new BrowserType.LaunchOptions().setHeadless(headless)
-            );
+            browser = playwright.chromium().launch(launchOptions(headless));
             invalidateCachedContext();
         }
         if (sessionContext == null) {

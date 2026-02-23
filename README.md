@@ -169,7 +169,6 @@ Open: **http://localhost:4200** — Angular dev server with live reload.
 
 - CF CLI installed and authenticated (`cf login`)
 - Target org and space selected (`cf target -o <org> -s <space>`)
-- `apt-buildpack` available in your marketplace — verify with `cf buildpacks`
 
 ### Deploy
 
@@ -177,16 +176,31 @@ Open: **http://localhost:4200** — Angular dev server with live reload.
 ./cf-push.sh
 ```
 
-This script builds the JAR, assembles a `dist/` folder containing the JAR and `apt.yml`, then runs `cf push`.
+This script builds the JAR with `mvn package`, copies it to `dist/`, and runs `cf push`.
 
 ### What the manifest configures
 
 | Setting | Value | Reason |
 |---------|-------|--------|
+| `path` | `dist/campaign-manager-1.0.0.jar` | Point directly at the JAR so `java_buildpack_offline` can detect it |
 | `memory` | 2G | Chromium needs more memory than a standard Java app |
-| `buildpacks` | `apt-buildpack` → `java_buildpack_offline` | `apt-buildpack` installs Chromium system libraries during staging |
-| `PLAYWRIGHT_HEADLESS` | `true` | PCF containers have no display server |
-| `PLAYWRIGHT_BROWSERS_PATH` | `/home/vcap/playwright-browsers` | Path for downloaded browser binaries |
+| `buildpacks` | `java_buildpack_offline` | Single buildpack — no `apt-buildpack` needed |
+| `PLAYWRIGHT_HEADLESS` | `true` | CF containers have no display server |
+| `PLAYWRIGHT_BROWSERS_PATH` | `/home/vcap/playwright-browsers` | Writable path for Playwright to download browser binaries |
+
+### How Chromium system libs are installed on CF
+
+CF containers (cflinuxfs4 / Ubuntu 22.04) are missing several graphics and accessibility libraries that Chromium requires (`libgbm1`, `libatk-bridge2.0-0`, etc.). Since we deploy a single JAR there is no `.profile.d` support.
+
+Instead, **`PlaywrightSystemDepsInstaller`** runs at Spring Boot startup:
+
+1. Runs `apt-get update` (redirecting state to a writable dir — no root needed)
+2. Runs `apt-get download` to fetch the required `.deb` packages
+3. Extracts the `.so` files with `dpkg-deb -x` into `~/playwright-system-deps/sysroot/`
+4. Passes the sysroot path as `LD_LIBRARY_PATH` to the Playwright Node.js driver via `Playwright.CreateOptions.setEnv()`
+5. Adds `--no-sandbox` to Chromium launch args (CF containers do not support kernel user namespaces)
+
+This runs once on first boot and is skipped on subsequent boots (marker file `.installed`). It adds ~15 seconds to the first startup and is completely transparent on local dev.
 
 ### Connecting Gmail in PCF
 
@@ -266,8 +280,9 @@ campaign-manager/
 │       │   ├── scheduler/              # Email queue processor (runs every 60s)
 │       │   ├── security/               # JWT utility + filter
 │       │   └── service/
-│       │       ├── PlaywrightSessionService.java  # Gmail session login
-│       │       └── PlaywrightGmailService.java    # Email sending automation
+│       │       ├── PlaywrightSystemDepsInstaller.java  # Installs Chromium libs on CF at startup
+│       │       ├── PlaywrightSessionService.java       # Gmail session login + browser lifecycle
+│       │       └── PlaywrightGmailService.java         # Email sending automation
 │       ├── frontend/                   # Angular 17 source
 │       │   ├── angular.json
 │       │   ├── package.json
@@ -302,6 +317,32 @@ campaign-manager/
 
 **Problem:** Playwright can't find Gmail's compose button
 **Solution:** Gmail occasionally changes their CSS selectors. Check `PlaywrightGmailService.java` and update the selectors if needed.
+
+### Cloud Foundry / Playwright Issues
+
+**Problem:** App crashes on CF with `Host system is missing dependencies to run browsers`
+**Solution:** `PlaywrightSystemDepsInstaller` handles this automatically. Check the startup logs for:
+```
+PlaywrightSystemDepsInstaller: extracted N packages to /home/vcap/playwright-system-deps/sysroot
+```
+If `N = 0`, `apt-get update` or `apt-get download` failed. Possible causes:
+- No outbound internet access from the CF space — check egress network policies
+- `apt-get` not available in the container — verify the stack is `cflinuxfs4` (`cf app sh-campaign-manager`)
+
+**Problem:** `JAVA_TOOL_OPTIONS: --add-opens` / `Unrecognized option` crash on CF
+**Solution:** Remove the env var:
+```bash
+cf unset-env sh-campaign-manager JAVA_TOOL_OPTIONS
+cf restage sh-campaign-manager
+```
+This var is no longer needed — the reflection-based approach was replaced with `Playwright.CreateOptions.setEnv()`.
+
+**Problem:** Stale `JBP_CONFIG_EXECUTABLE_JAR` set on the app
+**Solution:** Remove it:
+```bash
+cf unset-env sh-campaign-manager JBP_CONFIG_EXECUTABLE_JAR
+cf push
+```
 
 ### Build Issues
 

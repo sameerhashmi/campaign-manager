@@ -4,11 +4,9 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Installs Playwright/Chromium system library dependencies in Cloud Foundry.
@@ -22,16 +20,12 @@ import java.util.Map;
  *                         existing Ubuntu package lists in /var/lib/apt/lists/)
  *  2. dpkg-deb -x       — extracts .so files into ~/playwright-system-deps/sysroot/
  *                         (no root needed)
- *  3. Reflection patch  — prepends the sysroot lib dirs to LD_LIBRARY_PATH in the
- *                         live JVM environment so Playwright's Node.js driver and
- *                         Chromium subprocess inherit the updated path.
+ *  3. getLibraryPath()  — returns the sysroot lib dirs for use in
+ *                         Playwright.CreateOptions.setEnv(), so the Playwright
+ *                         Node.js driver and Chromium subprocess pick up the libs.
  *
  * Runs only when the CF_INSTANCE_GUID / VCAP_APPLICATION env var is present (i.e.
  * running on CF). Skipped on local dev where system libs are already available.
- *
- * Requires the JVM to be started with:
- *   --add-opens java.base/java.lang=ALL-UNNAMED
- * (set via JAVA_TOOL_OPTIONS in manifest.yml).
  */
 @Component
 @Slf4j
@@ -50,8 +44,18 @@ public class PlaywrightSystemDepsInstaller {
             "libxcomposite1", "libxdamage1", "libxrandr2",
             "libgbm1", "libxkbcommon0", "libasound2",
             "libdrm2", "libpango-1.0-0", "libcairo2",
-            "libxfixes3", "libxi6", "libxrender1", "libxtst6"
+            "libxfixes3", "libxi6", "libxrender1", "libxtst6",
+            // transitive deps of the above
+            "libavahi-common3", "libavahi-client3",  // required by libcups2
+            "libwayland-server0",                     // required by libgbm1
+            "libxcb-randr0"                           // required by libxrandr2
     );
+
+    /** True when running in a Cloud Foundry container. */
+    public boolean isCloudFoundry() {
+        return System.getenv("CF_INSTANCE_GUID") != null
+                || System.getenv("VCAP_APPLICATION") != null;
+    }
 
     @PostConstruct
     public void setup() {
@@ -62,16 +66,25 @@ public class PlaywrightSystemDepsInstaller {
         try {
             if (!Files.exists(MARKER)) {
                 downloadAndExtract();
+            } else {
+                log.info("PlaywrightSystemDepsInstaller: libs already extracted, skipping download.");
             }
-            patchLibraryPath();
         } catch (Exception e) {
             log.error("PlaywrightSystemDepsInstaller: setup failed — {}", e.getMessage());
         }
     }
 
-    private boolean isCloudFoundry() {
-        return System.getenv("CF_INSTANCE_GUID") != null
-                || System.getenv("VCAP_APPLICATION") != null;
+    /**
+     * Returns the LD_LIBRARY_PATH value that includes the extracted sysroot lib dirs.
+     * Returns null when not on CF (no patching needed on local dev).
+     * Call this after {@link #setup()} to pass to {@code Playwright.CreateOptions.setEnv()}.
+     */
+    public String getLibraryPath() {
+        if (!isCloudFoundry()) return null;
+        String lib64   = SYSROOT.resolve("usr/lib/x86_64-linux-gnu").toString();
+        String lib      = SYSROOT.resolve("usr/lib").toString();
+        String current  = System.getenv("LD_LIBRARY_PATH");
+        return lib64 + ":" + lib + (current != null ? ":" + current : "");
     }
 
     private void downloadAndExtract() throws Exception {
@@ -79,10 +92,34 @@ public class PlaywrightSystemDepsInstaller {
         Files.createDirectories(DEBS);
         Files.createDirectories(SYSROOT);
 
+        // apt-get needs a writable lists directory.  In CF containers the system
+        // /var/lib/apt/lists/ is often empty or stale, so we run apt-get update
+        // first, redirecting state to a writable path under DEPS_DIR.
+        // No root is needed: update reads /etc/apt/sources.list (readable) and
+        // writes only to the dirs we redirect below.
+        Path aptLists = DEPS_DIR.resolve("apt-lists");
+        Files.createDirectories(aptLists.resolve("partial"));
+
+        // "-o" and the value MUST be separate list elements — ProcessBuilder does NOT
+        // use a shell to split arguments, so "-o Key=val" as one string is rejected.
+        String listsArg = "Dir::State::lists=" + aptLists.toAbsolutePath();
+
+        log.info("PlaywrightSystemDepsInstaller: running apt-get update...");
+        int updateRc = new ProcessBuilder("apt-get", "-o", listsArg, "-qq", "update")
+                .directory(DEBS.toFile())
+                .redirectErrorStream(true)
+                .start()
+                .waitFor();
+        if (updateRc != 0) {
+            log.warn("PlaywrightSystemDepsInstaller: apt-get update exit code {}; " +
+                     "will still attempt download", updateRc);
+        }
+
         // apt-get download saves .deb files to the current directory; no root needed.
-        // The cflinuxfs4 stack image includes /var/lib/apt/lists/ so no apt-get update required.
         var cmd = new java.util.ArrayList<String>();
         cmd.add("apt-get");
+        cmd.add("-o");
+        cmd.add(listsArg);
         cmd.add("download");
         cmd.addAll(PACKAGES);
 
@@ -98,51 +135,31 @@ public class PlaywrightSystemDepsInstaller {
         }
 
         // dpkg-deb -x extracts to an arbitrary directory; no root needed.
+        long extractedCount;
         try (var files = Files.list(DEBS)) {
-            files.filter(f -> f.toString().endsWith(".deb")).forEach(deb -> {
-                try {
-                    new ProcessBuilder("dpkg-deb", "-x",
-                            deb.toAbsolutePath().toString(),
-                            SYSROOT.toAbsolutePath().toString())
-                            .redirectErrorStream(true)
-                            .start()
-                            .waitFor();
-                } catch (Exception e) {
-                    log.warn("PlaywrightSystemDepsInstaller: failed to extract {}: {}",
-                             deb.getFileName(), e.getMessage());
-                }
-            });
+            extractedCount = files.filter(f -> f.toString().endsWith(".deb"))
+                    .peek(deb -> {
+                        try {
+                            new ProcessBuilder("dpkg-deb", "-x",
+                                    deb.toAbsolutePath().toString(),
+                                    SYSROOT.toAbsolutePath().toString())
+                                    .redirectErrorStream(true)
+                                    .start()
+                                    .waitFor();
+                        } catch (Exception e) {
+                            log.warn("PlaywrightSystemDepsInstaller: failed to extract {}: {}",
+                                     deb.getFileName(), e.getMessage());
+                        }
+                    })
+                    .count();
         }
 
-        Files.writeString(MARKER, "installed");
-        log.info("PlaywrightSystemDepsInstaller: libs extracted to {}", SYSROOT);
-    }
-
-    private void patchLibraryPath() {
-        String lib64 = SYSROOT.resolve("usr/lib/x86_64-linux-gnu").toString();
-        String lib   = SYSROOT.resolve("usr/lib").toString();
-        String current = System.getenv("LD_LIBRARY_PATH");
-        String updated = lib64 + ":" + lib + (current != null ? ":" + current : "");
-        setEnvVar("LD_LIBRARY_PATH", updated);
-        log.info("PlaywrightSystemDepsInstaller: LD_LIBRARY_PATH updated.");
-    }
-
-    /**
-     * Modifies the live JVM process environment so that child processes (Playwright's
-     * Node.js driver, Chromium) inherit the updated LD_LIBRARY_PATH.
-     * Requires --add-opens java.base/java.lang=ALL-UNNAMED on JDK 17+.
-     */
-    @SuppressWarnings("unchecked")
-    private void setEnvVar(String key, String value) {
-        try {
-            Class<?> pe = Class.forName("java.lang.ProcessEnvironment");
-            Field f = pe.getDeclaredField("theEnvironment");
-            f.setAccessible(true);
-            ((Map<String, String>) f.get(null)).put(key, value);
-        } catch (Exception e) {
-            log.warn("PlaywrightSystemDepsInstaller: could not patch LD_LIBRARY_PATH " +
-                     "via reflection ({}). Add --add-opens java.base/java.lang=ALL-UNNAMED " +
-                     "to JAVA_TOOL_OPTIONS.", e.getMessage());
+        log.info("PlaywrightSystemDepsInstaller: extracted {} packages to {}", extractedCount, SYSROOT);
+        if (extractedCount > 0) {
+            Files.writeString(MARKER, "installed");
+        } else {
+            log.warn("PlaywrightSystemDepsInstaller: no packages extracted — marker NOT written, " +
+                     "will retry on next startup");
         }
     }
 }
