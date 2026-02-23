@@ -7,6 +7,15 @@ set -e
 echo "==> Building application..."
 mvn package -q
 
+echo "==> Patching JAR manifest for CF java_buildpack_offline compatibility..."
+# Spring Boot 3.2+ changed Main-Class to org.springframework.boot.loader.launch.JarLauncher.
+# Broadcom java_buildpack_offline v4.87.0 only recognises the classic (pre-3.2) class name.
+# This patch rewrites Main-Class in the JAR so the buildpack detects it as an executable JAR.
+printf 'Main-Class: org.springframework.boot.loader.JarLauncher\n' > /tmp/cf-manifest-patch.txt
+jar ufm target/campaign-manager-1.0.0.jar /tmp/cf-manifest-patch.txt
+rm -f /tmp/cf-manifest-patch.txt
+echo "   Main-Class patched to: org.springframework.boot.loader.JarLauncher"
+
 echo "==> Assembling deployment directory..."
 rm -rf dist
 mkdir -p dist
