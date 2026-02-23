@@ -3,7 +3,7 @@ applications:
 - name: sh-campaign-manager
   memory: 2G
   random-route: true
-  path: dist
+  path: dist/campaign-manager-1.0.0.jar
   buildpacks:
     - https://github.com/cloudfoundry/apt-buildpack
     - java_buildpack_offline
