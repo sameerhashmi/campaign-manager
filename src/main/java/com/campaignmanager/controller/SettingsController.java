@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 @RestController
 @RequestMapping("/api/settings")
@@ -84,7 +85,12 @@ public class SettingsController {
         try {
             Path sessionPath = sessionService.getSessionPath();
             Files.createDirectories(sessionPath.getParent());
-            file.transferTo(sessionPath.toFile());
+            // Use InputStream copy so the absolute path is honoured regardless of
+            // Tomcat's working directory (transferTo(File) resolves relative paths
+            // against Tomcat's temp dir, not the Spring Boot app root).
+            try (var in = file.getInputStream()) {
+                Files.copy(in, sessionPath, StandardCopyOption.REPLACE_EXISTING);
+            }
             sessionService.invalidateCachedContext();
             log.info("Gmail session uploaded via file upload ({} bytes)", file.getSize());
             GmailSessionStatusDto dto = buildStatus();
