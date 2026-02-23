@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -29,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * and the frontend polls GET /api/settings/gmail/status to detect completion.
  */
 @Service
+@DependsOn("playwrightSystemDepsInstaller")
 @Slf4j
 public class PlaywrightSessionService {
 
