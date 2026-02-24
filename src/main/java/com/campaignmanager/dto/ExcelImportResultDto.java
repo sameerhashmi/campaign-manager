@@ -9,6 +9,7 @@ import java.util.List;
 public class ExcelImportResultDto {
     private int contactsImported;
     private int templatesImported;
+    private int skipped;
     private List<String> errors = new ArrayList<>();
     private String message;
 }

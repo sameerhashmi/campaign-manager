@@ -30,6 +30,19 @@ public class Contact {
 
     private String category;
 
+    private String phone;
+
+    private String play;
+
+    @Column(name = "sub_play")
+    private String subPlay;
+
+    @Column(name = "ae_role")
+    private String aeRole;
+
+    @Column(name = "email_link", length = 2048)
+    private String emailLink;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

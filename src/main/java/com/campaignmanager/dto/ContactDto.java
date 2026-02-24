@@ -20,6 +20,11 @@ public class ContactDto {
     private String role;
     private String company;
     private String category;
+    private String phone;
+    private String play;
+    private String subPlay;
+    private String aeRole;
+    private String emailLink;
     private LocalDateTime createdAt;
     private boolean enrolledInCampaign;
 }

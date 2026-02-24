@@ -78,6 +78,11 @@ public class ContactService {
         contact.setRole(dto.getRole());
         contact.setCompany(dto.getCompany());
         contact.setCategory(dto.getCategory());
+        contact.setPhone(dto.getPhone());
+        contact.setPlay(dto.getPlay());
+        contact.setSubPlay(dto.getSubPlay());
+        contact.setAeRole(dto.getAeRole());
+        contact.setEmailLink(dto.getEmailLink());
     }
 
     public ContactDto toDto(Contact c) {
@@ -88,6 +93,11 @@ public class ContactService {
         dto.setRole(c.getRole());
         dto.setCompany(c.getCompany());
         dto.setCategory(c.getCategory());
+        dto.setPhone(c.getPhone());
+        dto.setPlay(c.getPlay());
+        dto.setSubPlay(c.getSubPlay());
+        dto.setAeRole(c.getAeRole());
+        dto.setEmailLink(c.getEmailLink());
         dto.setCreatedAt(c.getCreatedAt());
         return dto;
     }

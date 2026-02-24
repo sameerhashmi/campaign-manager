@@ -30,6 +30,8 @@ public interface EmailJobRepository extends JpaRepository<EmailJob, Long> {
 
     List<EmailJob> findAllByOrderByScheduledAtDesc();
 
+    boolean existsByCampaignContactIdAndStepNumber(Long campaignContactId, int stepNumber);
+
     @Query("SELECT ej FROM EmailJob ej WHERE ej.campaignContact.campaign.id = :campaignId " +
            "ORDER BY ej.scheduledAt DESC")
     List<EmailJob> findByCampaignIdOrdered(@Param("campaignId") Long campaignId);
