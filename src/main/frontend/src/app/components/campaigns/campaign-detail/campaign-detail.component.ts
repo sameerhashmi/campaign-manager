@@ -182,10 +182,28 @@ import { EmailJobService } from '../../../services/email-job.service';
 
             <!-- TAB 3: Contacts -->
             <mat-tab label="Contacts ({{ enrolledContacts.length }})">
+              <!-- Hidden Excel file inputs -->
+              <input #excelAddInput type="file" accept=".xlsx,.xls" style="display:none"
+                     (change)="onExcelSelected($event, false)">
+              <input #excelReplaceInput type="file" accept=".xlsx,.xls" style="display:none"
+                     (change)="onExcelSelected($event, true)">
+
               <div class="tab-content">
                 <div class="tab-actions">
                   <button mat-raised-button color="primary" (click)="showContactPicker = !showContactPicker">
                     <mat-icon>person_add</mat-icon> Add Contacts
+                  </button>
+                  <button mat-stroked-button color="primary" (click)="excelAddInput.click()"
+                          [disabled]="importingExcel" style="margin-left:8px"
+                          matTooltip="Import contacts from Excel and add to existing list">
+                    <mat-icon>upload_file</mat-icon>
+                    {{ importingExcel ? 'Importing…' : 'Add from Excel' }}
+                  </button>
+                  <button mat-stroked-button color="warn" (click)="excelReplaceInput.click()"
+                          [disabled]="importingExcel" style="margin-left:8px"
+                          matTooltip="Replace ALL existing contacts with the ones in this Excel file">
+                    <mat-icon>sync</mat-icon>
+                    {{ importingExcel ? 'Importing…' : 'Replace with new Excel' }}
                   </button>
                 </div>
 
@@ -410,6 +428,7 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
   showContactPicker = false;
   editingTemplate: EmailTemplate | null = null;
   selectedContactIds = new Set<number>();
+  importingExcel = false;
 
   templateForm: FormGroup;
   contactColumns = ['name', 'email', 'role', 'company', 'actions'];
@@ -562,6 +581,30 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
     this.campaignService.removeContact(this.campaignId, contactId).subscribe(() => {
       this.campaignService.getContacts(this.campaignId).subscribe(c => this.enrolledContacts = c);
     });
+  }
+
+  onExcelSelected(event: Event, replace: boolean): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    if (replace && !confirm(`Replace ALL ${this.enrolledContacts.length} existing contacts with the contacts in "${file.name}"?`)) {
+      (event.target as HTMLInputElement).value = '';
+      return;
+    }
+    this.importingExcel = true;
+    this.campaignService.importExcel(this.campaignId, file, replace).subscribe({
+      next: result => {
+        this.importingExcel = false;
+        const msg = result.message + (result.errors?.length ? ` (${result.errors.length} error(s))` : '');
+        this.snackBar.open(msg, 'Close', { duration: 6000, panelClass: result.errors?.length ? 'snack-error' : 'snack-success' });
+        this.campaignService.getContacts(this.campaignId).subscribe(c => this.enrolledContacts = c);
+        this.campaignService.getById(this.campaignId).subscribe(c => this.campaign = c);
+      },
+      error: err => {
+        this.importingExcel = false;
+        this.snackBar.open(err?.error?.message ?? 'Import failed', 'Close', { duration: 6000, panelClass: 'snack-error' });
+      }
+    });
+    (event.target as HTMLInputElement).value = '';
   }
 
   retryJob(job: EmailJob): void {

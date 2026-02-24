@@ -151,11 +151,17 @@ public class CampaignController {
 
     // --- Excel Import ---
 
+    /**
+     * Import contacts (and optionally templates) from an Excel file.
+     * ?replace=true removes all existing campaign contacts first (replace mode).
+     * Default (false) is additive — new contacts added, existing ones updated.
+     */
     @PostMapping("/{id}/import-excel")
     public ResponseEntity<ExcelImportResultDto> importExcel(@PathVariable Long id,
-                                                            @RequestParam("file") MultipartFile file) {
+                                                            @RequestParam("file") MultipartFile file,
+                                                            @RequestParam(defaultValue = "false") boolean replace) {
         try {
-            ExcelImportResultDto result = excelImportService.importFromExcel(id, file);
+            ExcelImportResultDto result = excelImportService.importFromExcel(id, file, replace);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             ExcelImportResultDto error = new ExcelImportResultDto();

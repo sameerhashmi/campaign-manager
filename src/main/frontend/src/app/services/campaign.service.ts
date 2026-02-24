@@ -79,11 +79,12 @@ export class CampaignService {
     return this.http.get<EmailJob[]>(`${this.base}/${campaignId}/jobs${params}`);
   }
 
-  // Excel import
-  importExcel(campaignId: number, file: File): Observable<ExcelImportResult> {
+  // Excel import — replace=true clears existing contacts before importing
+  importExcel(campaignId: number, file: File, replace = false): Observable<ExcelImportResult> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<ExcelImportResult>(`${this.base}/${campaignId}/import-excel`, formData);
+    return this.http.post<ExcelImportResult>(
+      `${this.base}/${campaignId}/import-excel?replace=${replace}`, formData);
   }
 }
 

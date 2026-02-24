@@ -106,13 +106,19 @@ public class CampaignService {
                 String resolvedSubject = resolveTokens(template.getSubject(), contact);
                 String resolvedBody = resolveTokens(template.getBodyTemplate(), contact);
 
+                // If the scheduled time has already passed, mark the job as SKIPPED
+                // so it is never picked up by the scheduler.
+                EmailJobStatus jobStatus = template.getScheduledAt().isBefore(now)
+                        ? EmailJobStatus.SKIPPED
+                        : EmailJobStatus.SCHEDULED;
+
                 EmailJob job = new EmailJob();
                 job.setCampaignContact(cc);
                 job.setStepNumber(template.getStepNumber());
                 job.setSubject(resolvedSubject);
                 job.setBody(resolvedBody);
                 job.setScheduledAt(template.getScheduledAt());
-                job.setStatus(EmailJobStatus.SCHEDULED);
+                job.setStatus(jobStatus);
                 emailJobRepository.save(job);
             }
         }

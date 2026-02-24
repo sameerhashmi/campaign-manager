@@ -47,10 +47,25 @@ public class ExcelImportService {
 
     @Transactional
     public ExcelImportResultDto importFromExcel(Long campaignId, MultipartFile file) throws Exception {
+        return importFromExcel(campaignId, file, false);
+    }
+
+    /**
+     * @param replace if true, removes all existing CampaignContacts (and their pending jobs)
+     *                before importing. Existing SENT/FAILED jobs are preserved on the contact record
+     *                but the contact is removed from the campaign enrollment list.
+     */
+    @Transactional
+    public ExcelImportResultDto importFromExcel(Long campaignId, MultipartFile file, boolean replace) throws Exception {
         ExcelImportResultDto result = new ExcelImportResultDto();
 
         Campaign campaign = campaignRepository.findById(campaignId)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
+
+        if (replace) {
+            campaignContactRepository.deleteByCampaignId(campaignId);
+            log.info("Replace mode: removed all existing contacts from campaign {}", campaignId);
+        }
 
         try (InputStream is = file.getInputStream();
              Workbook workbook = new XSSFWorkbook(is)) {
