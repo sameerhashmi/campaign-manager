@@ -213,11 +213,18 @@ PCF containers are headless — the **Connect Gmail** button cannot open a visib
 3. Log in to Gmail in the Chrome window that opens
 4. The session is saved to **`./data/gmail-session.json`** in the directory you ran the JAR from (project root by default)
 
-**Step 2 — Upload the session file via the Settings UI:**
+**Step 2 — Upload the session file (choose one option):**
 
+**Option A — Upload via Settings UI (recommended)**
 1. Open your PCF app in the browser → **Settings**
 2. Click **Upload Session File**
 3. Pick the `gmail-session.json` file from your local `./data/` folder
+4. The status updates to **Connected** — done
+
+**Option B — Paste JSON in browser (no file access needed)**
+1. Open `./data/gmail-session.json` in a text editor and copy all the contents
+2. Open your PCF app → **Settings** → scroll to **Paste Session JSON**
+3. Paste the JSON into the text area and click **Save Session**
 4. The status updates to **Connected** — done
 
 **Alternative: upload via curl**
@@ -243,20 +250,23 @@ curl -X POST https://<your-app>.cfapps.io/api/settings/gmail/upload-session \
 
 ### Binding a persistent database (recommended for production)
 
+Without a bound database service the app uses an H2 file-based database which is
+wiped on every CF restart/restage. Bind a MySQL service to get persistent storage:
+
 ```bash
-# Create a MySQL service (tile name varies by TAS foundation)
+# 1. Create a MySQL service instance (tile name varies by TAS foundation)
 cf create-service p.mysql db-small campaign-db
+
+# 2. Bind it to the app
 cf bind-service sh-campaign-manager campaign-db
+
+# 3. Restage so the new VCAP_SERVICES is picked up
 cf restage sh-campaign-manager
 ```
 
-Then add `src/main/resources/application-cloud.properties`:
-```properties
-spring.datasource.url=${vcap.services.campaign-db.credentials.jdbcUrl}
-spring.jpa.database-platform=org.hibernate.dialect.MySQLDialect
-spring.jpa.hibernate.ddl-auto=update
-spring.h2.console.enabled=false
-```
+No other configuration is needed. `CloudDataSourceConfig` reads `VCAP_SERVICES`
+automatically, finds the MySQL `jdbcUrl`, and wires it up. Hibernate auto-detects
+the dialect from the live JDBC connection.
 
 ---
 
