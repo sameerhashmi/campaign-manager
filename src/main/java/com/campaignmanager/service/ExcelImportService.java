@@ -58,15 +58,17 @@ public class ExcelImportService {
     private final GoogleDocParserService googleDocParser;
     private final PlaywrightSessionService sessionService;
 
-    @Transactional
     public ExcelImportResultDto importFromExcel(Long campaignId, MultipartFile file) throws Exception {
         return importFromExcel(campaignId, file, false);
     }
 
     /**
      * @param replace if true, removes all existing CampaignContacts before importing.
+     *
+     * NOTE: Not annotated with @Transactional intentionally — each row's saves are committed
+     * immediately at the repository level. This prevents holding an open DB transaction during
+     * Playwright I/O (Google Doc fetches), which can cause connection timeouts.
      */
-    @Transactional
     public ExcelImportResultDto importFromExcel(Long campaignId, MultipartFile file, boolean replace) throws Exception {
         try (InputStream is = file.getInputStream()) {
             return importFromStream(campaignId, is, replace);
@@ -80,7 +82,6 @@ public class ExcelImportService {
      * @param sheetUrl any Google Sheets URL
      * @param replace  if true, clears existing campaign contacts first
      */
-    @Transactional
     public ExcelImportResultDto importFromGoogleSheet(Long campaignId, String sheetUrl, boolean replace) throws Exception {
         Matcher m = SHEET_ID.matcher(sheetUrl);
         if (!m.find()) {
@@ -111,7 +112,7 @@ public class ExcelImportService {
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
 
         if (replace) {
-            campaignContactRepository.deleteByCampaignId(campaignId);
+            doDeleteByCampaignId(campaignId);
             log.info("Replace mode: removed all existing contacts from campaign {}", campaignId);
         }
 
@@ -156,6 +157,12 @@ public class ExcelImportService {
                 "Import complete: %d contact(s) added/updated, %d email template(s) imported.",
                 result.getContactsImported(), result.getTemplatesImported()));
         return result;
+    }
+
+    /** Wrapped in its own transaction so the delete commits before per-row saves start. */
+    @Transactional
+    protected void doDeleteByCampaignId(Long campaignId) {
+        campaignContactRepository.deleteByCampaignId(campaignId);
     }
 
     // ─── Format detection ─────────────────────────────────────────────────────
@@ -237,7 +244,7 @@ public class ExcelImportService {
             }
 
             try {
-                // Upsert contact
+                // Upsert contact — each save() is its own auto-transaction at repo level
                 Contact contact = contactRepository.findByEmail(email).orElse(new Contact());
                 contact.setEmail(email);
                 String name = getCellString(row, nameCol);
@@ -252,16 +259,22 @@ public class ExcelImportService {
                 if (emailLink   != null) contact.setEmailLink(emailLink);
                 if (contact.getCreatedAt() == null) contact.setCreatedAt(LocalDateTime.now());
                 final Contact savedContact = contactRepository.save(contact);
+                log.info("Row {}: saved contact id={} email={}", rowNum, savedContact.getId(), email);
 
-                // Enroll in campaign
+                // Enroll in campaign — immediate commit via repo-level transaction
+                final Long campaignId    = campaign.getId();
+                final Long contactId     = savedContact.getId();
+                final int  currentRowNum = rowNum;
                 CampaignContact cc = campaignContactRepository
-                        .findByCampaignIdAndContactId(campaign.getId(), savedContact.getId())
+                        .findByCampaignIdAndContactId(campaignId, contactId)
                         .orElseGet(() -> {
                             CampaignContact n = new CampaignContact();
                             n.setCampaign(campaign);
                             n.setContact(savedContact);
                             n.setEnrolledAt(LocalDateTime.now());
-                            return campaignContactRepository.save(n);
+                            CampaignContact saved = campaignContactRepository.save(n);
+                            log.info("Row {}: enrolled contact {} in campaign {}", currentRowNum, contactId, campaignId);
+                            return saved;
                         });
 
                 result.setContactsImported(result.getContactsImported() + 1);
