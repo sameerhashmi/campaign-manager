@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService, ExcelImportResult } from '../../../services/campaign.service';
 
@@ -17,10 +18,10 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
   selector: 'app-campaign-form',
   standalone: true,
   imports: [
-    CommonModule, ReactiveFormsModule, RouterLink,
+    CommonModule, ReactiveFormsModule, FormsModule, RouterLink,
     MatCardModule, MatFormFieldModule, MatInputModule,
     MatButtonModule, MatIconModule, MatSnackBarModule, MatProgressSpinnerModule,
-    MatDividerModule, NavComponent
+    MatDividerModule, MatTooltipModule, NavComponent
   ],
   template: `
     <app-nav>
@@ -29,13 +30,13 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
           <h1>{{ editId ? 'Edit Campaign' : 'New Campaign' }}</h1>
         </div>
 
-        <mat-card style="max-width: 700px">
+        <mat-card style="max-width: 760px">
           <mat-card-content>
             <form [formGroup]="form" (ngSubmit)="save()">
 
               <mat-form-field appearance="outline">
                 <mat-label>Campaign Name</mat-label>
-                <input matInput formControlName="name" placeholder="e.g. Q1 Outreach">
+                <input matInput formControlName="name" placeholder="e.g. Q1 Tanzu Outreach">
                 @if (form.get('name')?.hasError('required')) {
                   <mat-error>Name is required</mat-error>
                 }
@@ -63,40 +64,130 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
 
               <mat-divider style="margin: 8px 0"></mat-divider>
 
-              <!-- Excel Import Section (only for new campaigns) -->
+              <!-- Import Section (only for new campaigns) -->
               @if (!editId) {
-                <div class="excel-section">
-                  <div class="excel-header">
-                    <mat-icon>table_chart</mat-icon>
-                    <div>
-                      <strong>Import Contacts &amp; Templates from Excel</strong>
-                      <div class="excel-sub">
-                        Upload an .xlsx file to automatically import contacts and email templates.
+                <div class="import-section">
+                  <div class="section-title">
+                    <mat-icon>upload_file</mat-icon>
+                    <strong>Import Contacts from Spreadsheet</strong>
+                  </div>
+                  <div class="section-sub">
+                    Each row = one contact with their own 7-email schedule and Google Doc link.
+                  </div>
+
+                  <!-- Mode toggle -->
+                  <div class="mode-tabs">
+                    <button type="button" class="mode-tab" [class.active]="importMode === 'excel'"
+                            (click)="importMode = 'excel'">
+                      <mat-icon>table_chart</mat-icon> Upload Excel File
+                    </button>
+                    <button type="button" class="mode-tab" [class.active]="importMode === 'gsheet'"
+                            (click)="importMode = 'gsheet'">
+                      <mat-icon>table_view</mat-icon> Google Sheets URL
+                    </button>
+                  </div>
+
+                  <!-- Excel upload -->
+                  @if (importMode === 'excel') {
+                    <div class="file-drop-area" (click)="fileInput.click()"
+                         [class.has-file]="selectedFile">
+                      <mat-icon>upload_file</mat-icon>
+                      @if (selectedFile) {
+                        <span>{{ selectedFile.name }}</span>
+                        <button mat-icon-button type="button" (click)="clearFile($event)"
+                                matTooltip="Remove file">
+                          <mat-icon>close</mat-icon>
+                        </button>
+                      } @else {
+                        <span>Click to choose an Excel file (.xlsx)</span>
+                      }
+                      <input #fileInput type="file" accept=".xlsx,.xls" hidden
+                             (change)="onFileSelected($event)">
+                    </div>
+                  }
+
+                  <!-- Google Sheets URL -->
+                  @if (importMode === 'gsheet') {
+                    <mat-form-field appearance="outline" style="width:100%">
+                      <mat-label>Google Sheets URL</mat-label>
+                      <input matInput [(ngModel)]="gsheetUrl"
+                             [ngModelOptions]="{standalone: true}"
+                             placeholder="https://docs.google.com/spreadsheets/d/...">
+                      <mat-icon matSuffix>link</mat-icon>
+                      <mat-hint>Must be accessible with your connected Google/Gmail account</mat-hint>
+                    </mat-form-field>
+                  }
+
+                  <!-- Column reference grid -->
+                  <div class="col-ref">
+                    <div class="col-ref-title">Expected spreadsheet columns:</div>
+                    <div class="col-grid">
+                      <div class="col-item required">
+                        <span class="col-name">Name</span>
+                        <span class="col-badge req">Required</span>
+                      </div>
+                      <div class="col-item required">
+                        <span class="col-name">Email</span>
+                        <span class="col-badge req">Required</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">Title</span>
+                        <span class="col-badge opt">Optional</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">Phone</span>
+                        <span class="col-badge opt">Optional</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">Company</span>
+                        <span class="col-badge opt">Optional</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">Play</span>
+                        <span class="col-badge opt">Optional</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">Sub Play</span>
+                        <span class="col-badge opt">Optional</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">AE/SA</span>
+                        <span class="col-badge opt">Optional</span>
+                      </div>
+                      <div class="col-item required">
+                        <span class="col-name">Email Link</span>
+                        <span class="col-badge req">Google Doc URL</span>
+                      </div>
+                      <div class="col-item required">
+                        <span class="col-name">Email 1–7</span>
+                        <span class="col-badge req">Send dates</span>
+                      </div>
+                      <div class="col-item">
+                        <span class="col-name">Opt Out</span>
+                        <span class="col-badge skip">Y = skip row</span>
                       </div>
                     </div>
                   </div>
 
-                  <div class="file-drop-area" (click)="fileInput.click()"
-                       [class.has-file]="selectedFile">
-                    <mat-icon>upload_file</mat-icon>
-                    @if (selectedFile) {
-                      <span>{{ selectedFile.name }}</span>
-                      <button mat-icon-button type="button" (click)="clearFile($event)"
-                              matTooltip="Remove file">
-                        <mat-icon>close</mat-icon>
-                      </button>
-                    } @else {
-                      <span>Click to choose an Excel file (.xlsx)</span>
-                    }
-                    <input #fileInput type="file" accept=".xlsx,.xls" hidden
-                           (change)="onFileSelected($event)">
-                  </div>
-
-                  <div class="excel-format-hint">
-                    <strong>Expected format — single sheet with columns:</strong>
-                    <code>Name</code>, <code>Title</code>, <code>Email</code>, <code>Phone</code>, <code>Play</code>, <code>Sub Play</code>, <code>AE/SA</code>, <code>Email Link</code> (Google Doc URL), <code>Email 1</code>–<code>Email 7</code> (send dates), <code>Opt Out</code>
-                    &nbsp;·&nbsp; Rows with <code>Opt Out = Y</code> are skipped.
-                    Each contact's <code>Email Link</code> doc must contain sections labeled <code>Email 1:</code> … <code>Email 7:</code> with a <code>Subject:</code> line and body.
+                  <!-- Google Doc format hint -->
+                  <div class="doc-hint">
+                    <mat-icon class="doc-hint-icon">description</mat-icon>
+                    <div>
+                      <strong>Email Link</strong> must be a Google Doc URL. The doc must contain sections:
+                      <div class="doc-example">
+                        Email 1:<br>
+                        Subject: Your subject line here<br>
+                        Body of the first email…<br><br>
+                        Email 2:<br>
+                        Subject: Follow-up subject<br>
+                        Body of the second email…
+                      </div>
+                      Supported tokens in subject &amp; body:
+                      <code>{{ tokenName }}</code>
+                      <code>{{ tokenTitle }}</code>
+                      <code>{{ tokenCompany }}</code>
+                      <code>{{ tokenPlay }}</code>
+                    </div>
                   </div>
 
                   @if (importResult) {
@@ -118,7 +209,9 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
                 <button mat-raised-button color="primary" type="submit"
                         [disabled]="form.invalid || saving">
                   @if (saving) { <mat-spinner diameter="18"></mat-spinner> }
-                  @else { {{ editId ? 'Save Changes' : 'Create Campaign' }} }
+                  @else {
+                    {{ editId ? 'Save Changes' : (hasImport ? 'Create &amp; Import' : 'Create Campaign') }}
+                  }
                 </button>
               </div>
             </form>
@@ -137,12 +230,24 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
     }
     .notice-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
     .session-notice a { color: #1a73e8; font-weight: 600; }
-    .excel-section { display: flex; flex-direction: column; gap: 12px; }
-    .excel-header {
-      display: flex; align-items: flex-start; gap: 10px;
-      mat-icon { color: #188038; margin-top: 2px; }
+    .import-section { display: flex; flex-direction: column; gap: 12px; }
+    .section-title {
+      display: flex; align-items: center; gap: 8px; font-size: 15px;
+      mat-icon { color: #188038; }
     }
-    .excel-sub { font-size: 12px; color: #5f6368; margin-top: 2px; }
+    .section-sub { font-size: 12px; color: #5f6368; margin-top: -4px; }
+    .mode-tabs {
+      display: flex; gap: 0; border: 1px solid #dadce0; border-radius: 8px;
+      overflow: hidden; width: fit-content;
+    }
+    .mode-tab {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 18px; border: none; background: #f8f9fa; cursor: pointer;
+      font-size: 13px; font-weight: 500; color: #5f6368; transition: background 0.15s;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; }
+      &.active { background: #1a73e8; color: #fff; }
+      &:not(.active):hover { background: #e8eaed; }
+    }
     .file-drop-area {
       border: 2px dashed #dadce0; border-radius: 8px;
       padding: 20px; display: flex; align-items: center; gap: 10px;
@@ -152,11 +257,35 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
       &.has-file { border-color: #188038; color: #188038; background: #f0faf4; }
       mat-icon { flex-shrink: 0; }
     }
-    .excel-format-hint {
-      font-size: 12px; color: #5f6368;
-      background: #f8f9fa; padding: 8px 12px; border-radius: 4px;
-      code { background: #e8eaed; padding: 1px 4px; border-radius: 3px; }
+    .col-ref {
+      background: #f8f9fa; border-radius: 8px; padding: 12px 14px;
     }
+    .col-ref-title { font-size: 12px; font-weight: 600; color: #5f6368; margin-bottom: 10px; }
+    .col-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px;
+    }
+    .col-item {
+      display: flex; flex-direction: column; gap: 3px;
+      background: #fff; border: 1px solid #e8eaed; border-radius: 6px; padding: 8px 10px;
+      &.required { border-color: #1a73e8; }
+    }
+    .col-name { font-size: 13px; font-weight: 600; color: #202124; }
+    .col-badge {
+      font-size: 10px; border-radius: 3px; padding: 1px 5px; width: fit-content;
+      &.req { background: #e8f0fe; color: #1a73e8; }
+      &.opt { background: #f1f3f4; color: #5f6368; }
+      &.skip { background: #fce8e6; color: #c5221f; }
+    }
+    .doc-hint {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: #fff8e1; padding: 12px 14px; border-radius: 8px; font-size: 12px; color: #5f6368;
+    }
+    .doc-hint-icon { color: #f9ab00; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px; }
+    .doc-example {
+      font-family: monospace; font-size: 11px; background: #fff3cd; padding: 8px;
+      border-radius: 4px; margin: 6px 0; white-space: pre-wrap; line-height: 1.6;
+    }
+    code { background: #e8eaed; padding: 1px 5px; border-radius: 3px; font-size: 11px; margin: 0 2px; }
     .import-result {
       display: flex; gap: 10px; align-items: flex-start;
       background: #e8f5e9; padding: 10px 14px; border-radius: 8px;
@@ -172,8 +301,20 @@ export class CampaignFormComponent implements OnInit {
   form: FormGroup;
   saving = false;
   editId?: number;
+  importMode: 'excel' | 'gsheet' = 'excel';
   selectedFile: File | null = null;
+  gsheetUrl = '';
   importResult: ExcelImportResult | null = null;
+
+  // Token display strings (avoids Angular treating {{...}} as interpolation bindings)
+  readonly tokenName = '{{name}}';
+  readonly tokenTitle = '{{title}}';
+  readonly tokenCompany = '{{company}}';
+  readonly tokenPlay = '{{play}}';
+
+  get hasImport(): boolean {
+    return this.importMode === 'excel' ? !!this.selectedFile : !!this.gsheetUrl.trim();
+  }
 
   constructor(
     private fb: FormBuilder,
@@ -228,8 +369,7 @@ export class CampaignFormComponent implements OnInit {
 
     request.subscribe({
       next: c => {
-        if (!this.editId && this.selectedFile) {
-          // After creation, import the Excel file
+        if (!this.editId && this.importMode === 'excel' && this.selectedFile) {
           this.campaignService.importExcel(c.id!, this.selectedFile).subscribe({
             next: result => {
               this.saving = false;
@@ -240,9 +380,28 @@ export class CampaignFormComponent implements OnInit {
               this.snackBar.open(msg, '', { duration: 5000, panelClass: 'snack-success' });
               this.router.navigate(['/campaigns', c.id]);
             },
-            error: () => {
+            error: err => {
               this.saving = false;
-              this.snackBar.open('Campaign created, but Excel import failed.', 'Close', {
+              this.snackBar.open(err?.error?.message || 'Campaign created, but Excel import failed.', 'Close', {
+                duration: 5000, panelClass: 'snack-error'
+              });
+              this.router.navigate(['/campaigns', c.id]);
+            }
+          });
+        } else if (!this.editId && this.importMode === 'gsheet' && this.gsheetUrl.trim()) {
+          this.campaignService.importGoogleSheet(c.id!, this.gsheetUrl.trim()).subscribe({
+            next: result => {
+              this.saving = false;
+              this.importResult = result;
+              const msg = result.errors.length === 0
+                  ? `Campaign created! ${result.message}`
+                  : `Campaign created with warnings. ${result.message}`;
+              this.snackBar.open(msg, '', { duration: 5000, panelClass: 'snack-success' });
+              this.router.navigate(['/campaigns', c.id]);
+            },
+            error: err => {
+              this.saving = false;
+              this.snackBar.open(err?.error?.message || 'Campaign created, but Google Sheet import failed.', 'Close', {
                 duration: 5000, panelClass: 'snack-error'
               });
               this.router.navigate(['/campaigns', c.id]);

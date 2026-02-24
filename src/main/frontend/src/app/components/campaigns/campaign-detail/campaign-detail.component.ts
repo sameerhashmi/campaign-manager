@@ -279,22 +279,51 @@ import { EmailJobService } from '../../../services/email-job.service';
                   </mat-card>
                 }
 
-                <table mat-table [dataSource]="enrolledContacts" class="full-table">
+                <div style="overflow-x:auto">
+                <table mat-table [dataSource]="enrolledContacts" class="full-table contacts-table">
                   <ng-container matColumnDef="name">
                     <th mat-header-cell *matHeaderCellDef>Name</th>
-                    <td mat-cell *matCellDef="let c">{{ c.name }}</td>
+                    <td mat-cell *matCellDef="let c">
+                      <strong>{{ c.name }}</strong>
+                      @if (c.role) { <div class="cell-sub">{{ c.role }}</div> }
+                    </td>
                   </ng-container>
                   <ng-container matColumnDef="email">
                     <th mat-header-cell *matHeaderCellDef>Email</th>
                     <td mat-cell *matCellDef="let c">{{ c.email }}</td>
                   </ng-container>
-                  <ng-container matColumnDef="role">
-                    <th mat-header-cell *matHeaderCellDef>Role</th>
-                    <td mat-cell *matCellDef="let c">{{ c.role }}</td>
-                  </ng-container>
                   <ng-container matColumnDef="company">
                     <th mat-header-cell *matHeaderCellDef>Company</th>
-                    <td mat-cell *matCellDef="let c">{{ c.company }}</td>
+                    <td mat-cell *matCellDef="let c">{{ c.company || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="play">
+                    <th mat-header-cell *matHeaderCellDef>Play</th>
+                    <td mat-cell *matCellDef="let c">
+                      @if (c.play) {
+                        <span>{{ c.play }}</span>
+                        @if (c.subPlay) { <div class="cell-sub">{{ c.subPlay }}</div> }
+                      } @else { <span>—</span> }
+                    </td>
+                  </ng-container>
+                  <ng-container matColumnDef="aeRole">
+                    <th mat-header-cell *matHeaderCellDef>AE/SA</th>
+                    <td mat-cell *matCellDef="let c">{{ c.aeRole || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="phone">
+                    <th mat-header-cell *matHeaderCellDef>Phone</th>
+                    <td mat-cell *matCellDef="let c">{{ c.phone || '—' }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="emailLink">
+                    <th mat-header-cell *matHeaderCellDef>Email Doc</th>
+                    <td mat-cell *matCellDef="let c">
+                      @if (c.emailLink) {
+                        <a [href]="c.emailLink" target="_blank" rel="noopener"
+                           matTooltip="Open Google Doc" style="color:#1a73e8">
+                          <mat-icon style="font-size:16px;vertical-align:middle">open_in_new</mat-icon>
+                          View Doc
+                        </a>
+                      } @else { <span>—</span> }
+                    </td>
                   </ng-container>
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef></th>
@@ -307,6 +336,7 @@ import { EmailJobService } from '../../../services/email-job.service';
                   <tr mat-header-row *matHeaderRowDef="contactColumns"></tr>
                   <tr mat-row *matRowDef="let row; columns: contactColumns;"></tr>
                 </table>
+                </div>
 
                 @if (enrolledContacts.length === 0 && !showContactPicker) {
                   <div class="empty-state">
@@ -468,7 +498,7 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
   gsheetUrl = '';
 
   templateForm: FormGroup;
-  contactColumns = ['name', 'email', 'role', 'company', 'actions'];
+  contactColumns = ['name', 'email', 'company', 'play', 'aeRole', 'phone', 'emailLink', 'actions'];
   jobColumns = ['contact', 'step', 'subject', 'scheduledAt', 'sentAt', 'status', 'actions'];
 
   constructor(
