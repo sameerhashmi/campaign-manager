@@ -1,7 +1,7 @@
 import { Component, OnInit, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,7 +27,7 @@ import { EmailJobService } from '../../../services/email-job.service';
   selector: 'app-campaign-detail',
   standalone: true,
   imports: [
-    CommonModule, RouterLink, ReactiveFormsModule,
+    CommonModule, RouterLink, ReactiveFormsModule, FormsModule,
     MatTabsModule, MatCardModule, MatButtonModule, MatIconModule,
     MatFormFieldModule, MatInputModule, MatTableModule, MatSortModule, MatChipsModule,
     MatSnackBarModule, MatProgressSpinnerModule, MatCheckboxModule,
@@ -206,6 +206,40 @@ import { EmailJobService } from '../../../services/email-job.service';
                     {{ importingExcel ? 'Importing…' : 'Replace with new Excel' }}
                   </button>
                 </div>
+
+                <!-- Google Sheets import -->
+                <mat-card class="gsheet-card">
+                  <mat-card-header>
+                    <mat-icon mat-card-avatar style="color:#1a73e8">table_view</mat-icon>
+                    <mat-card-title>Import from Google Sheet</mat-card-title>
+                    <mat-card-subtitle>Paste a Google Sheets URL to import directly — uses your connected Gmail session</mat-card-subtitle>
+                  </mat-card-header>
+                  <mat-card-content>
+                    <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
+                      <mat-label>Google Sheets URL</mat-label>
+                      <input matInput [(ngModel)]="gsheetUrl"
+                             placeholder="https://docs.google.com/spreadsheets/d/..."
+                             [disabled]="importingGSheet">
+                      <mat-icon matSuffix>link</mat-icon>
+                    </mat-form-field>
+                    <div style="display:flex;gap:8px;margin-top:4px">
+                      <button mat-stroked-button color="primary"
+                              (click)="onImportGSheet(false)"
+                              [disabled]="!gsheetUrl || importingGSheet"
+                              matTooltip="Add contacts from Google Sheet to existing list">
+                        <mat-icon>add</mat-icon>
+                        {{ importingGSheet ? 'Importing…' : 'Add from Sheet' }}
+                      </button>
+                      <button mat-stroked-button color="warn"
+                              (click)="onImportGSheet(true)"
+                              [disabled]="!gsheetUrl || importingGSheet"
+                              matTooltip="Replace ALL existing contacts with contacts from this sheet">
+                        <mat-icon>sync</mat-icon>
+                        {{ importingGSheet ? 'Importing…' : 'Replace with Sheet' }}
+                      </button>
+                    </div>
+                  </mat-card-content>
+                </mat-card>
 
                 @if (showContactPicker) {
                   <mat-card class="form-card">
@@ -404,6 +438,7 @@ import { EmailJobService } from '../../../services/email-job.service';
       text-align: center; padding: 60px; color: #9aa0a6;
       mat-icon { font-size: 48px; width: 48px; height: 48px; display: block; margin: 0 auto 12px; }
     }
+    .gsheet-card { margin: 16px 0; max-width: 700px; }
   `]
 })
 export class CampaignDetailComponent implements OnInit, AfterViewInit {
@@ -429,6 +464,8 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
   editingTemplate: EmailTemplate | null = null;
   selectedContactIds = new Set<number>();
   importingExcel = false;
+  importingGSheet = false;
+  gsheetUrl = '';
 
   templateForm: FormGroup;
   contactColumns = ['name', 'email', 'role', 'company', 'actions'];
@@ -605,6 +642,27 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
       }
     });
     (event.target as HTMLInputElement).value = '';
+  }
+
+  onImportGSheet(replace: boolean): void {
+    const url = this.gsheetUrl.trim();
+    if (!url) return;
+    if (replace && !confirm(`Replace ALL ${this.enrolledContacts.length} existing contacts with contacts from the Google Sheet?`)) return;
+    this.importingGSheet = true;
+    this.campaignService.importGoogleSheet(this.campaignId, url, replace).subscribe({
+      next: result => {
+        this.importingGSheet = false;
+        const msg = result.message + (result.errors?.length ? ` (${result.errors.length} error(s))` : '');
+        this.snackBar.open(msg, 'Close', { duration: 6000, panelClass: result.errors?.length ? 'snack-error' : 'snack-success' });
+        this.campaignService.getContacts(this.campaignId).subscribe(c => this.enrolledContacts = c);
+        this.campaignService.getById(this.campaignId).subscribe(c => this.campaign = c);
+        this.campaignService.getJobs(this.campaignId).subscribe(j => this.jobsDataSource.data = j);
+      },
+      error: err => {
+        this.importingGSheet = false;
+        this.snackBar.open(err?.error?.message ?? 'Google Sheet import failed', 'Close', { duration: 6000, panelClass: 'snack-error' });
+      }
+    });
   }
 
   retryJob(job: EmailJob): void {

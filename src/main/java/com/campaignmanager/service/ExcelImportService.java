@@ -3,6 +3,8 @@ package com.campaignmanager.service;
 import com.campaignmanager.dto.ExcelImportResultDto;
 import com.campaignmanager.model.*;
 import com.campaignmanager.repository.*;
+import com.microsoft.playwright.APIResponse;
+import com.microsoft.playwright.BrowserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -19,6 +22,8 @@ import java.time.format.DateTimeParseException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Parses an Excel workbook and imports contacts + email templates for a campaign.
@@ -42,12 +47,16 @@ import java.util.Map;
 @Slf4j
 public class ExcelImportService {
 
+    private static final Pattern SHEET_ID = Pattern.compile(
+            "/spreadsheets/d/([a-zA-Z0-9_-]+)");
+
     private final ContactRepository contactRepository;
     private final CampaignRepository campaignRepository;
     private final CampaignContactRepository campaignContactRepository;
     private final EmailTemplateRepository templateRepository;
     private final EmailJobRepository emailJobRepository;
     private final GoogleDocParserService googleDocParser;
+    private final PlaywrightSessionService sessionService;
 
     @Transactional
     public ExcelImportResultDto importFromExcel(Long campaignId, MultipartFile file) throws Exception {
@@ -59,6 +68,43 @@ public class ExcelImportService {
      */
     @Transactional
     public ExcelImportResultDto importFromExcel(Long campaignId, MultipartFile file, boolean replace) throws Exception {
+        try (InputStream is = file.getInputStream()) {
+            return importFromStream(campaignId, is, replace);
+        }
+    }
+
+    /**
+     * Downloads a Google Sheet via the saved Gmail/Google session and imports it.
+     * Accepts any Google Sheets URL (view, edit, etc.) — the sheet ID is extracted automatically.
+     *
+     * @param sheetUrl any Google Sheets URL
+     * @param replace  if true, clears existing campaign contacts first
+     */
+    @Transactional
+    public ExcelImportResultDto importFromGoogleSheet(Long campaignId, String sheetUrl, boolean replace) throws Exception {
+        Matcher m = SHEET_ID.matcher(sheetUrl);
+        if (!m.find()) {
+            throw new IllegalArgumentException("Cannot extract Google Sheet ID from URL: " + sheetUrl);
+        }
+        String exportUrl = "https://docs.google.com/spreadsheets/d/" + m.group(1) + "/export?format=xlsx";
+        log.info("Downloading Google Sheet for campaign {}: {}", campaignId, exportUrl);
+
+        BrowserContext ctx = sessionService.getSessionContext();
+        APIResponse response = ctx.request().get(exportUrl);
+        if (!response.ok()) {
+            throw new RuntimeException(
+                    "Failed to download Google Sheet (HTTP " + response.status() + "). " +
+                    "Make sure the Gmail session is active and the sheet is shared with the signed-in account.");
+        }
+
+        try (InputStream is = new ByteArrayInputStream(response.body())) {
+            return importFromStream(campaignId, is, replace);
+        }
+    }
+
+    // ── Shared workbook processing ────────────────────────────────────────────
+
+    private ExcelImportResultDto importFromStream(Long campaignId, InputStream is, boolean replace) throws Exception {
         ExcelImportResultDto result = new ExcelImportResultDto();
 
         Campaign campaign = campaignRepository.findById(campaignId)
@@ -69,8 +115,7 @@ public class ExcelImportService {
             log.info("Replace mode: removed all existing contacts from campaign {}", campaignId);
         }
 
-        try (InputStream is = file.getInputStream();
-             Workbook workbook = new XSSFWorkbook(is)) {
+        try (Workbook workbook = new XSSFWorkbook(is)) {
 
             Sheet firstSheet = workbook.getSheetAt(0);
 

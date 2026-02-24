@@ -171,6 +171,23 @@ public class CampaignController {
         }
     }
 
+    // --- Google Sheet Import ---
+
+    @PostMapping("/{id}/import-gsheet")
+    public ResponseEntity<ExcelImportResultDto> importGoogleSheet(@PathVariable Long id,
+                                                                   @RequestParam String url,
+                                                                   @RequestParam(defaultValue = "false") boolean replace) {
+        try {
+            ExcelImportResultDto result = excelImportService.importFromGoogleSheet(id, url, replace);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            ExcelImportResultDto error = new ExcelImportResultDto();
+            error.getErrors().add(e.getMessage());
+            error.setMessage("Import failed: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
     // --- Email Jobs ---
 
     @GetMapping("/{id}/jobs")

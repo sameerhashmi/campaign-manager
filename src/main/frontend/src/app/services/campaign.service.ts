@@ -86,6 +86,12 @@ export class CampaignService {
     return this.http.post<ExcelImportResult>(
       `${this.base}/${campaignId}/import-excel?replace=${replace}`, formData);
   }
+
+  // Google Sheet import — downloads sheet via Playwright session, same logic as Excel
+  importGoogleSheet(campaignId: number, sheetUrl: string, replace = false): Observable<ExcelImportResult> {
+    const params = `url=${encodeURIComponent(sheetUrl)}&replace=${replace}`;
+    return this.http.post<ExcelImportResult>(`${this.base}/${campaignId}/import-gsheet?${params}`, {});
+  }
 }
 
 export interface ExcelImportResult {
