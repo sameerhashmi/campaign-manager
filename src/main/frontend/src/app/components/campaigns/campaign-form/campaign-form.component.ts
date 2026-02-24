@@ -93,10 +93,10 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
                   </div>
 
                   <div class="excel-format-hint">
-                    <strong>Expected format:</strong>
-                    Sheet 1 "Contacts" — columns: <code>name</code>, <code>email</code>, <code>role</code>, <code>company</code>
-                    &nbsp;|&nbsp;
-                    Sheet 2 "Templates" — columns: <code>step_number</code>, <code>subject</code>, <code>body</code>, <code>scheduled_at</code> (e.g. <code>2024-06-01 09:00</code>)
+                    <strong>Expected format — single sheet with columns:</strong>
+                    <code>Name</code>, <code>Title</code>, <code>Email</code>, <code>Phone</code>, <code>Play</code>, <code>Sub Play</code>, <code>AE/SA</code>, <code>Email Link</code> (Google Doc URL), <code>Email 1</code>–<code>Email 7</code> (send dates), <code>Opt Out</code>
+                    &nbsp;·&nbsp; Rows with <code>Opt Out = Y</code> are skipped.
+                    Each contact's <code>Email Link</code> doc must contain sections labeled <code>Email 1:</code> … <code>Email 7:</code> with a <code>Subject:</code> line and body.
                   </div>
 
                   @if (importResult) {
