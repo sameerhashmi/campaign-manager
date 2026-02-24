@@ -1,11 +1,14 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatInputModule } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { NavComponent } from '../shared/nav/nav.component';
 import { SettingsService, GmailSessionStatus } from '../../services/settings.service';
 import { interval, Subscription } from 'rxjs';
@@ -15,9 +18,10 @@ import { switchMap, takeWhile } from 'rxjs/operators';
   selector: 'app-settings',
   standalone: true,
   imports: [
-    CommonModule,
+    CommonModule, FormsModule,
     MatCardModule, MatButtonModule, MatIconModule,
     MatProgressSpinnerModule, MatSnackBarModule, MatDividerModule,
+    MatInputModule, MatFormFieldModule,
     NavComponent
   ],
   template: `
@@ -143,6 +147,36 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           </mat-card-content>
         </mat-card>
 
+        <!-- Option 3: Paste JSON directly -->
+        <mat-card class="info-card" style="margin-top:24px">
+          <mat-card-header>
+            <div mat-card-avatar class="paste-avatar">
+              <mat-icon>content_paste</mat-icon>
+            </div>
+            <mat-card-title>Paste Session JSON</mat-card-title>
+            <mat-card-subtitle>
+              Can't run the JAR locally or use the file picker? Paste the contents of
+              <code>gmail-session.json</code> directly here.
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
+              <mat-label>Paste gmail-session.json contents</mat-label>
+              <textarea matInput [(ngModel)]="pastedJson" rows="6"
+                        placeholder='{"cookies":[...],"origins":[...]}'></textarea>
+            </mat-form-field>
+          </mat-card-content>
+          <mat-divider></mat-divider>
+          <mat-card-actions>
+            <button mat-raised-button color="primary"
+                    [disabled]="!pastedJson.trim() || uploading"
+                    (click)="savePastedJson()">
+              <mat-icon>save</mat-icon>
+              {{ uploading ? 'Saving…' : 'Save Session' }}
+            </button>
+          </mat-card-actions>
+        </mat-card>
+
       </div>
     </app-nav>
   `,
@@ -179,12 +213,18 @@ import { switchMap, takeWhile } from 'rxjs/operators';
     .steps-list { margin: 0; padding-left: 20px; line-height: 2; color: #3c4043; }
     .section-heading { font-weight: 600; font-size: 13px; color: #3c4043; margin: 0 0 4px; }
     code { background: #f1f3f4; border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+    .paste-avatar {
+      background: #1a73e8; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; width: 40px; height: 40px;
+    }
+    .paste-avatar mat-icon { color: white; }
   `]
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   status: GmailSessionStatus | null = null;
   loading = true;
   uploading = false;
+  pastedJson = '';
   private pollSub?: Subscription;
 
   constructor(
@@ -249,6 +289,36 @@ export class SettingsComponent implements OnInit, OnDestroy {
     });
     // Reset the input so the same file can be re-uploaded if needed
     (event.target as HTMLInputElement).value = '';
+  }
+
+  savePastedJson(): void {
+    const trimmed = this.pastedJson.trim();
+    try {
+      JSON.parse(trimmed); // validate it's valid JSON before sending
+    } catch {
+      this.snackBar.open('Invalid JSON — please paste the full contents of gmail-session.json.', 'Close', {
+        duration: 6000, panelClass: 'snack-error'
+      });
+      return;
+    }
+    const blob = new Blob([trimmed], { type: 'application/json' });
+    const file = new File([blob], 'gmail-session.json', { type: 'application/json' });
+    this.uploading = true;
+    this.settingsService.uploadSession(file).subscribe({
+      next: s => {
+        this.status = s;
+        this.uploading = false;
+        this.pastedJson = '';
+        this.snackBar.open('Session saved — Gmail is now connected!', '', {
+          duration: 5000, panelClass: 'snack-success'
+        });
+      },
+      error: (err) => {
+        this.uploading = false;
+        const msg = err?.error?.message ?? 'Save failed. Make sure the JSON is a valid gmail-session.json.';
+        this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
+      }
+    });
   }
 
   disconnect(): void {
