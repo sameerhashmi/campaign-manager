@@ -18,6 +18,7 @@ A full-stack email campaign management application built with **Spring Boot 3** 
 - **Past-Date Skip** — Jobs with a scheduled date already in the past are automatically marked SKIPPED at import time
 - **Opt-Out Support** — Rows with `Opt Out = Y` in the import sheet are skipped entirely
 - **Single JAR Deployment** — Angular is bundled into the Spring Boot JAR at build time
+- **Eastern Time Scheduling** — Server runs on `America/New_York` — enter all dates in EST, no UTC conversion needed
 
 ---
 
@@ -69,6 +70,113 @@ Open your browser at: **http://localhost:8080**
 | `admin`  | `admin123` |
 
 > Change these in `DataInitializer.java` before deploying.
+
+---
+
+## Application Screen Layout
+
+### Sidebar Navigation
+
+The left sidebar provides navigation to all main sections:
+
+```
+[Campaign Manager logo]
+──────────────────────
+  Dashboard
+  Campaigns
+  Contacts
+  Settings
+──────────────────────
+  [Logout]
+```
+
+### Dashboard
+
+Stats overview cards at the top:
+
+```
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│  Total          │ │  Active         │ │  Emails Sent    │ │  Pending        │
+│  Campaigns      │ │  Campaigns      │ │  (All Time)     │ │  (Scheduled)    │
+└─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
+Below the cards: a table of all campaigns with status chips (DRAFT / ACTIVE / PAUSED).
+
+---
+
+### Campaign Detail — 3 Tabs
+
+When you open a campaign you see three tabs:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  [Campaign Name]                          [Launch] [Pause]│
+├──────────┬──────────────────────┬─────────────────────────┤
+│ Overview │ Contacts (N)         │ Email Jobs (N)           │
+└──────────┴──────────────────────┴─────────────────────────┘
+```
+
+#### Tab 1 — Overview
+
+Edit campaign name, Gmail address, interval settings, and view current status. Shows last-launched timestamp.
+
+#### Tab 2 — Contacts
+
+Manage contacts enrolled in the campaign and import new ones.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [Add from Excel]  [Replace with Excel]                          │
+│                                                                  │
+│  Import from Google Sheet                                        │
+│  ┌─────────────────────────────────────┐ [Add from Sheet]       │
+│  │ Paste Google Sheets URL here...      │ [Replace with Sheet]  │
+│  └─────────────────────────────────────┘                        │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Add individual contact                                    │   │
+│  │ [Contact dropdown ▼]              [Add Contact]          │   │
+│  └──────────────────────────────────────────────────────────┘   │
+├──────────────────────────────────────────────────────────────────┤
+│ NAME        EMAIL              TITLE       PLAY    ACTIONS       │
+│ Jane Doe    jane@acme.com      VP Sales    Tanzu   [Remove]      │
+│ John Smith  john@acme.com      Director    Aria    [Remove]      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+#### Tab 3 — Email Jobs
+
+View all scheduled/sent/failed/skipped email jobs for this campaign.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ CONTACT     STEP  SUBJECT              SCHEDULED         STATUS   ACTIONS     │
+│ Jane Doe    1     Hi Jane, quick...   2/26/2026 9:00    SCHEDULED            │
+│ Jane Doe    2     Following up...     3/2/2026  9:00    SCHEDULED            │
+│ Jane Doe    3     One more thought    3/9/2026  9:00    SCHEDULED            │
+│ John Smith  1     Hi John, quick...   2/26/2026 9:00    SENT      2/26 9:01  │
+│ John Smith  2     Following up...     3/2/2026  9:00    SCHEDULED            │
+│ ...                                                                           │
+│ Old Contact 1     Re: Tanzu demo      1/15/2026 9:00    SKIPPED              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+Status chip colors: **SCHEDULED** (blue) · **SENT** (green) · **FAILED** (red) · **SKIPPED** (grey)
+
+---
+
+### Settings Page
+
+```
+┌────────────────────────────────────────┐
+│ Gmail Session                          │
+│ Status: ● Connected (since 2/25/2026)  │
+│ [Connect Gmail]  [Disconnect]          │
+│ [Upload Session File]                  │
+│ [Paste Session JSON]                   │
+└────────────────────────────────────────┘
+```
 
 ---
 
@@ -137,17 +245,16 @@ curl -X POST https://<your-app>/api/settings/gmail/upload-session \
 1. **Connect Gmail** in Settings (one-time setup above)
 2. Go to **Campaigns → New Campaign**
 3. Enter a campaign name and optionally your Gmail address (for reference)
-4. Optionally upload an Excel file (or provide a Google Sheets URL after creation) to import all contacts and schedule email jobs in one step
-5. Click **Create Campaign**
-6. In the campaign detail, go to the **Contacts** tab
-7. Import contacts and schedule email jobs using one of:
+4. Click **Create Campaign**
+5. In the campaign detail, go to the **Contacts** tab
+6. Import contacts and schedule email jobs using one of:
    - **Add from Excel** / **Replace with Excel** — upload an `.xlsx` file
-   - **Import from Google Sheet** — paste a Google Sheets URL directly; the app downloads and parses it using the connected Gmail session
-8. Click **Launch** to activate the campaign
-9. The scheduler checks for due jobs every 60 seconds and sends them via Gmail automation
-10. Monitor status in the **Email Jobs** tab (SCHEDULED → SENT or FAILED with retry)
+   - **Import from Google Sheet** — paste a Google Sheets URL; the app downloads it using the connected Gmail session
+7. Click **Launch** to set the campaign to ACTIVE
+8. The scheduler checks for due jobs every 60 seconds and sends them via Gmail automation
+9. Monitor status in the **Email Jobs** tab (SCHEDULED → SENT or FAILED with retry)
 
-> **Note:** With the direct per-contact format, launching is optional — all email jobs are created at import time with individual scheduled dates. Launching just changes the campaign status to ACTIVE and ensures any contacts added manually also get jobs created.
+> **Note:** With the direct per-contact format, all email jobs are created at import time with individual scheduled dates. Launching just marks the campaign ACTIVE.
 
 ---
 
@@ -175,28 +282,80 @@ A single sheet where **each row = one contact** with their own 7-email schedule 
 | `Email 2`–`Email 7` | No | Send date/time for email steps 2–7 |
 | `Opt Out` | No | Set to `Y` to skip this row entirely |
 
-#### Google Doc format (Email Link)
+#### Date/Time Format
+
+All dates are interpreted as **Eastern Time (EST/EDT)** — enter times in your local time if you are in the Eastern timezone.
+
+Supported date formats in the spreadsheet:
+
+| Format | Example |
+|--------|---------|
+| `M/d/yyyy H:mm:ss` | `2/26/2026 14:00:00` |
+| `M/d/yyyy H:mm` | `2/26/2026 14:00` |
+| `M/d/yy H:mm:ss` | `2/26/26 14:00:00` |
+| `M/d/yy H:mm` | `2/26/26 14:00` |
+| `yyyy-MM-dd HH:mm:ss` | `2026-02-26 14:00:00` |
+| `yyyy-MM-dd HH:mm` | `2026-02-26 14:00` |
+
+> **Important:** Jobs with a date/time already in the past at import time are automatically set to **SKIPPED**. Use future dates to get **SCHEDULED** jobs.
+
+#### Example sheet rows
+
+| Name | Title | Email | Phone | Play | Sub Play | AE/SA | Email Link | Email 1 | Email 2 | Email 3 | Opt Out |
+|------|-------|-------|-------|------|----------|-------|------------|---------|---------|---------|---------|
+| Jane Doe | VP Sales | jane@acme.com | 415-555-0100 | Tanzu | Generic | AE | https://docs.google.com/document/d/... | 2/26/2026 9:00:00 | 3/2/2026 9:00:00 | 3/9/2026 9:00:00 | |
+| John Smith | Director | john@acme.com | 212-555-0200 | Aria | Starter | SA | https://docs.google.com/document/d/... | 2/26/2026 10:00:00 | 3/2/2026 10:00:00 | | Y |
+
+> John Smith has `Opt Out = Y` — this entire row is skipped, no jobs created.
+
+A sample file is available at: `examples/sample.xlsx`
+
+---
+
+#### Google Doc Format (Email Link column)
 
 Each contact's Google Doc must contain numbered sections. The app fetches it at import time using the connected Gmail session (same Google account = access to private docs).
 
+**Multi-line format (recommended):**
+
 ```
-Email 1:
-Subject: Hi {{name}}, quick question about {{play}}
+Email 1: Initial Outreach (Day 1)
+Subject: Quick question about {{play}}, {{name}}
 Hi {{name}},
 
-I wanted to reach out because...
+I wanted to reach out because your team is using VMware Tanzu and I think
+there's an opportunity to help with your current initiatives.
 
-Email 2:
+Best,
+Brian Stover
+—
+
+Email 2: Follow-Up (Day 4)
 Subject: Following up, {{name}}
+Hi {{name}},
+
 Just circling back on my previous note...
 
-Email 3:
-...
+Best,
+Brian Stover
+—
+
+Email 3: ...
 ```
 
-- Sections are detected by lines matching `Email 1:` … `Email 7:` (case-insensitive)
-- The `Subject:` line within each section is optional — if absent, the first non-blank line is used as the subject
-- Sections without a matching date column in the sheet are skipped
+**Single-line format (also supported):**
+
+```
+Email 1: Initial Outreach Subject: Quick question Hi {{name}}, I wanted to reach out...
+Email 2: Follow-Up Subject: Following up Hi {{name}}, Just circling back...
+```
+
+**Rules:**
+- Sections start on lines matching `Email 1:` … `Email 7:` (case-insensitive, description after the number is ignored)
+- The `Subject:` line is required within each section
+- A greeting (`Hi`, `Hello`, `Dear` + name) marks the start of the body
+- Trailing `—`, `---`, or blank lines after the body are stripped
+- Sections without a corresponding date column in the sheet are skipped
 
 #### Supported tokens (resolved at import time)
 
@@ -207,12 +366,6 @@ Email 3:
 | `{{role}}` | Contact title/role |
 | `{{company}}` | Contact company |
 | `{{play}}` | Contact play field |
-
-#### Example sheet row
-
-| Name | Title | Email | Phone | Play | Sub Play | AE/SA | Email Link | Email 1 | Email 2 | … | Opt Out |
-|------|-------|-------|-------|------|----------|-------|------------|---------|---------|---|---------|
-| Jane Doe | VP Sales | jane@acme.com | 415-555-0100 | Tanzu | Generic | AE | https://docs.google.com/... | 2/24/2026 9:00 | 3/1/2026 9:00 | … | N |
 
 ---
 
@@ -226,29 +379,26 @@ Still supported for backwards compatibility. Detected automatically when the fir
 |------|-------|------|---------|
 | John Smith | john@acme.com | VP Sales | Acme Corp |
 
-- `email` is required; all other columns are optional
-- Contacts are **upserted** by email
-
 #### Sheet 2 — "Templates"
 
 | step_number | subject | body | scheduled_at |
 |-------------|---------|------|--------------|
-| 1 | Hi {{name}} | Dear {{name}}, ... | 2024-06-01 09:00 |
-| 2 | Following up | Just checking in... | 2024-06-05 14:00 |
+| 1 | Hi {{name}} | Dear {{name}}, ... | 2026-02-26 09:00 |
+| 2 | Following up | Just checking in... | 2026-03-02 14:00 |
 
-- `scheduled_at` format: `YYYY-MM-DD HH:MM` (24-hour clock)
-- All contacts in the campaign share the same templates and scheduled dates
+- `scheduled_at` format: `YYYY-MM-DD HH:MM`
+- All contacts share the same templates and scheduled dates
 
 ---
 
 ## Importing from Google Sheets
 
-In addition to uploading a file, you can paste a Google Sheets URL directly in the **Contacts** tab of any campaign:
+In addition to uploading a file, paste a Google Sheets URL directly in the **Contacts** tab:
 
 1. Open the campaign → **Contacts** tab
 2. Scroll to the **Import from Google Sheet** card
 3. Paste any Google Sheets URL (share link, view link, edit link — the sheet ID is extracted automatically)
-4. Click **Add from Sheet** (additive) or **Replace with Sheet** (replaces all existing contacts)
+4. Click **Add from Sheet** (additive) or **Replace with Sheet** (replaces all existing contacts and jobs)
 
 The app downloads the sheet as `.xlsx` using the connected Gmail/Google session and processes it identically to a file upload.
 
@@ -261,7 +411,7 @@ The app downloads the sheet as `.xlsx` using the connected Gmail/Google session 
 | URL | Description |
 |-----|-------------|
 | http://localhost:8080 | Main application |
-| http://localhost:8080/h2-console | H2 database browser |
+| http://localhost:8080/h2-console | H2 database browser (local only) |
 | http://localhost:8080/api/dashboard/stats | Dashboard stats JSON |
 
 H2 console JDBC URL: `jdbc:h2:file:./data/campaigndb` (username: `sa`, no password)
@@ -299,8 +449,11 @@ Open: **http://localhost:4200** — Angular dev server with live reload.
 
 ```bash
 mvn package -DskipTests
+cp target/campaign-manager-1.0.0.jar dist/campaign-manager-1.0.0.jar
 cf push
 ```
+
+> Always copy the JAR to `dist/` before pushing — `manifest.yml` points CF at `dist/campaign-manager-1.0.0.jar`.
 
 ### What the manifest configures
 
@@ -312,6 +465,7 @@ cf push
 | `PLAYWRIGHT_HEADLESS` | `true` | CF containers have no display server |
 | `PLAYWRIGHT_BROWSERS_PATH` | `/home/vcap/playwright-browsers` | Writable path for Playwright to cache browser binaries |
 | `SPRING_PROFILES_ACTIVE` | `cloud` | Activates `CloudDataSourceConfig` for MySQL auto-binding |
+| `TZ` | `America/New_York` | Server clock runs EST — enter spreadsheet dates in Eastern Time |
 
 ### How Chromium system libs are installed on CF
 
@@ -355,7 +509,8 @@ campaign-manager/
 ├── scripts/
 │   └── capture-gmail-session.js        # Standalone Node.js script to capture Gmail session
 ├── examples/
-│   └── test.xlsx                        # Sample import sheet (direct per-contact format)
+│   ├── sample.xlsx                      # Sample import sheet (direct per-contact format)
+│   └── test.xlsx                        # Test import sheet
 ├── src/
 │   └── main/
 │       ├── java/com/campaignmanager/
@@ -439,6 +594,9 @@ campaign-manager/
 **Problem:** Google Sheet import fails with "No Gmail session"
 **Solution:** Connect Gmail first in Settings. The same session that accesses Gmail also grants access to Google Sheets and Docs owned by that account.
 
+**Problem:** All jobs are SKIPPED after import
+**Solution:** The scheduled dates in your spreadsheet are in the past relative to Eastern Time. Update the `Email 1`–`Email 7` columns to future dates and re-import using **Replace with Excel** or **Replace with Sheet**.
+
 ### Cloud Foundry / Playwright Issues
 
 **Problem:** App crashes on CF with `Host system is missing dependencies to run browsers`
@@ -454,6 +612,9 @@ If `N = 0`, `apt-get` may be blocked by network policy — check CF egress rules
 cf unset-env sh-campaign-manager JAVA_TOOL_OPTIONS
 cf restage sh-campaign-manager
 ```
+
+**Problem:** Gmail session lost after `cf push` / restart
+**Solution:** The CF filesystem is ephemeral. Re-upload `gmail-session.json` via Settings → Upload Session File after every redeploy.
 
 ### Build Issues
 

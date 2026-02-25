@@ -225,6 +225,9 @@ public class ExcelImportService {
             return;
         }
 
+        log.info("Direct format columns: name={} title={} email={} emailLink={} optOut={} emailDates={}",
+                nameCol, titleCol, emailCol, emailLinkCol, optOutCol, java.util.Arrays.toString(emailDateCols));
+
         LocalDateTime now = LocalDateTime.now();
         int rowNum = 1;
 
@@ -295,13 +298,19 @@ public class ExcelImportService {
                 }
 
                 // Create up to 7 EmailJob records
+                log.info("Row {}: {} email section(s) parsed from doc", rowNum, parsedEmails.size());
                 for (int step = 1; step <= 7; step++) {
                     LocalDateTime scheduledAt = readDateCell(row, emailDateCols[step - 1]);
-                    if (scheduledAt == null) continue; // column empty — skip this step
+                    if (scheduledAt == null) {
+                        log.debug("Row {}: step {} has no date (col={}), skipping", rowNum, step, emailDateCols[step - 1]);
+                        continue; // column empty — skip this step
+                    }
 
                     GoogleDocParserService.ParsedEmail pe = parsedEmails.get(step);
                     if (pe == null) {
-                        result.getErrors().add("Row " + rowNum + " (" + email + "): Email " + step + " section not found in Google Doc.");
+                        String msg = "Row " + rowNum + " (" + email + "): Email " + step + " section not found in Google Doc.";
+                        result.getErrors().add(msg);
+                        log.warn(msg);
                         continue;
                     }
 
@@ -325,6 +334,7 @@ public class ExcelImportService {
                     job.setScheduledAt(scheduledAt);
                     job.setStatus(status);
                     emailJobRepository.save(job);
+                    log.info("Row {}: created email job step={} scheduledAt={} status={}", rowNum, step, scheduledAt, status);
 
                     result.setTemplatesImported(result.getTemplatesImported() + 1);
                 }
@@ -415,7 +425,9 @@ public class ExcelImportService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"),
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("M/d/yyyy H:mm:ss"),
             DateTimeFormatter.ofPattern("M/d/yyyy H:mm"),
+            DateTimeFormatter.ofPattern("M/d/yy H:mm:ss"),
             DateTimeFormatter.ofPattern("M/d/yy H:mm")
     );
 

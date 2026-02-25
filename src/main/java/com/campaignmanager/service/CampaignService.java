@@ -72,69 +72,14 @@ public class CampaignService {
 
         List<CampaignContact> contacts = campaignContactRepository.findByCampaignId(id);
         if (contacts.isEmpty()) {
-            throw new RuntimeException("No contacts enrolled in this campaign. Add contacts before launching.");
+            throw new RuntimeException("No contacts enrolled in this campaign. Import a spreadsheet or add contacts before launching.");
         }
 
-        LocalDateTime now = LocalDateTime.now();
-
-        // Direct per-contact format: jobs were already created at import time.
-        // If there are existing email jobs, skip template-based job creation and just activate.
-        long existingJobCount = emailJobRepository.countByCampaignContactCampaignId(id);
-        if (existingJobCount > 0) {
-            log.info("Campaign {} has {} existing email job(s) from direct import — activating without template jobs",
-                    id, existingJobCount);
-            campaign.setStatus(CampaignStatus.ACTIVE);
-            campaign.setLaunchedAt(now);
-            return toDto(campaignRepository.save(campaign));
-        }
-
-        // Legacy template-based format: create jobs from email templates.
-        List<EmailTemplate> templates = templateRepository.findByCampaignIdOrderByStepNumber(id);
-        if (templates.isEmpty()) {
-            throw new RuntimeException(
-                    "Campaign has no email templates and no pre-scheduled email jobs. " +
-                    "Either upload a spreadsheet with per-contact emails or add email templates before launching.");
-        }
-
-        // Validate that all templates have a scheduled date/time set
-        List<EmailTemplate> missingSchedule = templates.stream()
-                .filter(t -> t.getScheduledAt() == null)
-                .toList();
-        if (!missingSchedule.isEmpty()) {
-            throw new RuntimeException(
-                    "All email steps must have a scheduled date and time before launching. " +
-                    "Missing schedule on step(s): " +
-                    missingSchedule.stream().map(t -> String.valueOf(t.getStepNumber()))
-                            .reduce((a, b) -> a + ", " + b).orElse(""));
-        }
-
-        for (CampaignContact cc : contacts) {
-            for (EmailTemplate template : templates) {
-                boolean jobExists = cc.getEmailJobs().stream()
-                        .anyMatch(j -> j.getStepNumber().equals(template.getStepNumber()));
-                if (jobExists) continue;
-
-                Contact contact = cc.getContact();
-                String resolvedSubject = resolveTokens(template.getSubject(), contact);
-                String resolvedBody = resolveTokens(template.getBodyTemplate(), contact);
-
-                EmailJobStatus jobStatus = template.getScheduledAt().isBefore(now)
-                        ? EmailJobStatus.SKIPPED
-                        : EmailJobStatus.SCHEDULED;
-
-                EmailJob job = new EmailJob();
-                job.setCampaignContact(cc);
-                job.setStepNumber(template.getStepNumber());
-                job.setSubject(resolvedSubject);
-                job.setBody(resolvedBody);
-                job.setScheduledAt(template.getScheduledAt());
-                job.setStatus(jobStatus);
-                emailJobRepository.save(job);
-            }
-        }
+        long jobCount = emailJobRepository.countByCampaignContactCampaignId(id);
+        log.info("Launching campaign {}: {} contact(s), {} email job(s)", id, contacts.size(), jobCount);
 
         campaign.setStatus(CampaignStatus.ACTIVE);
-        campaign.setLaunchedAt(now);
+        campaign.setLaunchedAt(LocalDateTime.now());
         return toDto(campaignRepository.save(campaign));
     }
 

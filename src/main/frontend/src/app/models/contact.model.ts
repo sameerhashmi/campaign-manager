@@ -5,6 +5,11 @@ export interface Contact {
   role?: string;
   company?: string;
   category?: string;
+  phone?: string;
+  play?: string;
+  subPlay?: string;
+  aeRole?: string;
+  emailLink?: string;
   createdAt?: string;
   enrolledInCampaign?: boolean;
 }

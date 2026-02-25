@@ -1,7 +1,7 @@
 import { Component, OnInit, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,7 +18,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService } from '../../../services/campaign.service';
 import { ContactService } from '../../../services/contact.service';
-import { Campaign, EmailTemplate } from '../../../models/campaign.model';
+import { Campaign } from '../../../models/campaign.model';
 import { Contact } from '../../../models/contact.model';
 import { EmailJob } from '../../../models/email-job.model';
 import { EmailJobService } from '../../../services/email-job.service';
@@ -91,96 +91,7 @@ import { EmailJobService } from '../../../services/email-job.service';
               </div>
             </mat-tab>
 
-            <!-- TAB 2: Templates -->
-            <mat-tab label="Email Templates ({{ templates.length }})">
-              <div class="tab-content">
-                <div class="tab-actions">
-                  <button mat-raised-button color="primary" (click)="openTemplateForm()">
-                    <mat-icon>add</mat-icon> Add Step
-                  </button>
-                </div>
-
-                @if (showTemplateForm) {
-                  <mat-card class="form-card">
-                    <mat-card-header>
-                      <mat-card-title>{{ editingTemplate ? 'Edit' : 'Add' }} Email Step</mat-card-title>
-                    </mat-card-header>
-                    <mat-card-content>
-                      <form [formGroup]="templateForm" (ngSubmit)="saveTemplate()">
-                        <mat-form-field appearance="outline">
-                          <mat-label>Step Number</mat-label>
-                          <input matInput type="number" formControlName="stepNumber" min="1" max="20">
-                        </mat-form-field>
-                        <mat-form-field appearance="outline">
-                          <mat-label>Subject</mat-label>
-                          <input matInput formControlName="subject" [placeholder]="subjectPlaceholder">
-                        </mat-form-field>
-                        <mat-form-field appearance="outline">
-                          <mat-label>Body Template</mat-label>
-                          <textarea matInput formControlName="bodyTemplate" rows="8"
-                                    [placeholder]="bodyPlaceholder"></textarea>
-                          <mat-hint>Use: {{ tokenName }} {{ tokenRole }} {{ tokenCompany }} {{ tokenCategory }}</mat-hint>
-                        </mat-form-field>
-                        <div class="scheduled-at-field">
-                          <label class="dt-label">Send Date &amp; Time <span class="required-star">*</span></label>
-                          <input type="datetime-local" formControlName="scheduledAt" class="dt-input">
-                          <div class="dt-hint">Set the exact date and time to send this email step.</div>
-                          @if (templateForm.get('scheduledAt')?.hasError('required') && templateForm.get('scheduledAt')?.touched) {
-                            <div class="dt-error">Send date and time is required</div>
-                          }
-                        </div>
-                        <div class="form-actions">
-                          <button mat-button type="button" (click)="cancelTemplateForm()">Cancel</button>
-                          <button mat-raised-button color="primary" type="submit" [disabled]="templateForm.invalid">Save</button>
-                        </div>
-                      </form>
-                    </mat-card-content>
-                  </mat-card>
-                }
-
-                @for (t of templates; track t.id) {
-                  <mat-card class="template-card">
-                    <mat-card-header>
-                      <mat-card-title>
-                        <mat-icon>mail</mat-icon>
-                        Step {{ t.stepNumber }} — {{ t.subject }}
-                      </mat-card-title>
-                      <div class="template-actions">
-                        <button mat-icon-button (click)="editTemplate(t)" matTooltip="Edit">
-                          <mat-icon>edit</mat-icon>
-                        </button>
-                        <button mat-icon-button (click)="deleteTemplate(t)" matTooltip="Delete">
-                          <mat-icon style="color:#ea4335">delete</mat-icon>
-                        </button>
-                      </div>
-                    </mat-card-header>
-                    <mat-card-content>
-                      @if (t.scheduledAt) {
-                        <div class="schedule-badge">
-                          <mat-icon>schedule</mat-icon>
-                          Sends: {{ t.scheduledAt | date:'medium' }}
-                        </div>
-                      } @else {
-                        <div class="schedule-badge missing">
-                          <mat-icon>warning</mat-icon>
-                          No send date set — edit this step to add one before launching.
-                        </div>
-                      }
-                      <pre class="body-preview">{{ t.bodyTemplate }}</pre>
-                    </mat-card-content>
-                  </mat-card>
-                }
-
-                @if (templates.length === 0 && !showTemplateForm) {
-                  <div class="empty-state">
-                    <mat-icon>mail_outline</mat-icon>
-                    <p>No email templates yet. Add your first email step.</p>
-                  </div>
-                }
-              </div>
-            </mat-tab>
-
-            <!-- TAB 3: Contacts -->
+            <!-- TAB 2: Contacts -->
             <mat-tab label="Contacts ({{ enrolledContacts.length }})">
               <!-- Hidden Excel file inputs -->
               <input #excelAddInput type="file" accept=".xlsx,.xls" style="display:none"
@@ -429,35 +340,7 @@ import { EmailJobService } from '../../../services/email-job.service';
     }
     .tab-content { padding: 24px 0; }
     .tab-actions { margin-bottom: 16px; }
-    .form-card { margin-bottom: 16px; max-width: 700px; }
-    .form-actions { display: flex; justify-content: flex-end; gap: 12px; }
-    form { display: flex; flex-direction: column; gap: 12px; }
-    .template-card { margin-bottom: 12px; }
-    .template-actions { margin-left: auto; display: flex; }
     mat-card-header { display: flex; align-items: center; }
-    .body-preview {
-      white-space: pre-wrap; font-size: 13px; color: #5f6368;
-      background: #f8f9fa; padding: 12px; border-radius: 4px; margin: 0;
-      max-height: 150px; overflow-y: auto;
-    }
-    .schedule-badge {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 12px; color: #1a73e8; margin-bottom: 10px;
-      mat-icon { font-size: 16px; width: 16px; height: 16px; }
-      &.missing { color: #e37400; }
-    }
-    .scheduled-at-field {
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .dt-label { font-size: 14px; color: #5f6368; font-weight: 500; }
-    .required-star { color: #ea4335; }
-    .dt-input {
-      border: 1px solid #dadce0; border-radius: 4px; padding: 10px 12px;
-      font-size: 14px; color: #202124; width: 100%; box-sizing: border-box;
-      &:focus { outline: none; border-color: #1a73e8; }
-    }
-    .dt-hint { font-size: 12px; color: #5f6368; }
-    .dt-error { font-size: 12px; color: #ea4335; }
     .detail-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
     .detail-row { display: flex; gap: 16px; align-items: baseline; }
     .label { width: 130px; font-weight: 500; color: #5f6368; font-size: 13px; flex-shrink: 0; }
@@ -473,7 +356,6 @@ import { EmailJobService } from '../../../services/email-job.service';
 })
 export class CampaignDetailComponent implements OnInit, AfterViewInit {
   campaign: Campaign | null = null;
-  templates: EmailTemplate[] = [];
   enrolledContacts: Contact[] = [];
   availableContacts: Contact[] = [];
   jobsDataSource = new MatTableDataSource<EmailJob>();
@@ -481,23 +363,12 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
 
   @ViewChild(MatSort) sort!: MatSort;
 
-  // Token display strings (avoids Angular treating {{...}} as bindings)
-  readonly tokenName = '{{name}}';
-  readonly tokenRole = '{{role}}';
-  readonly tokenCompany = '{{company}}';
-  readonly tokenCategory = '{{category}}';
-  readonly subjectPlaceholder = 'Hi {{name}}, quick question...';
-  readonly bodyPlaceholder = 'Dear {{name}},\n\nI wanted to reach out regarding...';
-
-  showTemplateForm = false;
   showContactPicker = false;
-  editingTemplate: EmailTemplate | null = null;
   selectedContactIds = new Set<number>();
   importingExcel = false;
   importingGSheet = false;
   gsheetUrl = '';
 
-  templateForm: FormGroup;
   contactColumns = ['name', 'email', 'company', 'play', 'aeRole', 'phone', 'emailLink', 'actions'];
   jobColumns = ['contact', 'step', 'subject', 'scheduledAt', 'sentAt', 'status', 'actions'];
 
@@ -509,14 +380,7 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
     private contactService: ContactService,
     private emailJobService: EmailJobService,
     private snackBar: MatSnackBar
-  ) {
-    this.templateForm = this.fb.group({
-      stepNumber: [1, [Validators.required, Validators.min(1)]],
-      subject: ['', Validators.required],
-      bodyTemplate: ['', Validators.required],
-      scheduledAt: ['', Validators.required]
-    });
-  }
+  ) {}
 
   ngOnInit(): void {
     const id = +this.route.snapshot.paramMap.get('id')!;
@@ -540,7 +404,6 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
       this.campaign = c;
       this.loading = false;
     });
-    this.campaignService.getTemplates(id).subscribe(t => this.templates = t);
     this.campaignService.getContacts(id).subscribe(c => this.enrolledContacts = c);
     this.campaignService.getJobs(id).subscribe(j => {
       this.jobsDataSource.data = j;
@@ -575,52 +438,6 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
 
   editCampaign(): void {
     this.router.navigate(['/campaigns', this.campaignId, 'edit']);
-  }
-
-  openTemplateForm(): void {
-    this.editingTemplate = null;
-    this.templateForm.reset({ stepNumber: this.templates.length + 1, scheduledAt: '' });
-    this.showTemplateForm = true;
-  }
-
-  editTemplate(t: EmailTemplate): void {
-    this.editingTemplate = t;
-    // Convert ISO string (2024-06-01T09:00:00) → datetime-local format (2024-06-01T09:00)
-    const scheduledAt = t.scheduledAt ? t.scheduledAt.substring(0, 16) : '';
-    this.templateForm.patchValue({ ...t, scheduledAt });
-    this.showTemplateForm = true;
-  }
-
-  cancelTemplateForm(): void {
-    this.showTemplateForm = false;
-    this.editingTemplate = null;
-  }
-
-  saveTemplate(): void {
-    if (this.templateForm.invalid) return;
-    // datetime-local gives "2024-06-01T09:00"; backend expects full ISO "2024-06-01T09:00:00"
-    const raw = this.templateForm.value;
-    const scheduledAt = raw.scheduledAt ? raw.scheduledAt + ':00' : null;
-    const data = { ...raw, scheduledAt, campaignId: this.campaignId };
-    const req = this.editingTemplate
-        ? this.campaignService.updateTemplate(this.campaignId, this.editingTemplate.id!, data)
-        : this.campaignService.addTemplate(this.campaignId, data);
-
-    req.subscribe({
-      next: () => {
-        this.showTemplateForm = false;
-        this.snackBar.open('Template saved', '', { duration: 2000, panelClass: 'snack-success' });
-        this.campaignService.getTemplates(this.campaignId).subscribe(t => this.templates = t);
-      },
-      error: err => this.snackBar.open(err.error?.message || 'Save failed', 'Close', { duration: 4000 })
-    });
-  }
-
-  deleteTemplate(t: EmailTemplate): void {
-    if (!confirm('Delete this email step?')) return;
-    this.campaignService.deleteTemplate(this.campaignId, t.id!).subscribe(() => {
-      this.campaignService.getTemplates(this.campaignId).subscribe(tmpl => this.templates = tmpl);
-    });
   }
 
   toggleContact(id: number): void {
