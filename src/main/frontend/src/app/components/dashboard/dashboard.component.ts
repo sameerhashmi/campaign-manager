@@ -1,23 +1,26 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTableModule } from '@angular/material/table';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatSortModule, MatSort } from '@angular/material/sort';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../shared/nav/nav.component';
 import { DashboardService } from '../../services/dashboard.service';
-import { DashboardStats } from '../../models/email-job.model';
+import { DashboardStats, EmailJob } from '../../models/email-job.model';
 import { SettingsService, GmailSessionStatus } from '../../services/settings.service';
 import { CampaignService } from '../../services/campaign.service';
 import { ContactService } from '../../services/contact.service';
 import { EmailJobService } from '../../services/email-job.service';
 import { Campaign } from '../../models/campaign.model';
 import { Contact } from '../../models/contact.model';
-import { EmailJob } from '../../models/email-job.model';
 
 type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
 
@@ -25,9 +28,10 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
   selector: 'app-dashboard',
   standalone: true,
   imports: [
-    CommonModule, RouterLink,
+    CommonModule, RouterLink, FormsModule,
     MatCardModule, MatIconModule, MatButtonModule, MatProgressSpinnerModule,
-    MatTableModule, MatChipsModule, MatTooltipModule, NavComponent
+    MatTableModule, MatSortModule, MatFormFieldModule, MatInputModule,
+    MatChipsModule, MatTooltipModule, NavComponent
   ],
   template: `
     <app-nav>
@@ -160,88 +164,104 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
 
                 <!-- Campaigns panel -->
                 @if (activePanel === 'campaigns' && !panelLoading) {
-                  <table mat-table [dataSource]="campaigns" class="panel-table">
+                  <table mat-table [dataSource]="campaignsDS" matSort #campaignsSort="matSort" class="panel-table">
                     <ng-container matColumnDef="name">
-                      <th mat-header-cell *matHeaderCellDef>Name</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="name">Name</th>
                       <td mat-cell *matCellDef="let c">
                         <a [routerLink]="['/campaigns', c.id]" class="link">{{ c.name }}</a>
                       </td>
                     </ng-container>
+                    <ng-container matColumnDef="gmailEmail">
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="gmailEmail">Email Sender</th>
+                      <td mat-cell *matCellDef="let c">{{ c.gmailEmail || gmailStatus?.connectedEmail || '—' }}</td>
+                    </ng-container>
                     <ng-container matColumnDef="status">
-                      <th mat-header-cell *matHeaderCellDef>Status</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="status">Status</th>
                       <td mat-cell *matCellDef="let c">
                         <span class="chip {{ c.status?.toLowerCase() }}">{{ c.status }}</span>
                       </td>
                     </ng-container>
                     <ng-container matColumnDef="contacts">
-                      <th mat-header-cell *matHeaderCellDef>Contacts</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="contactCount">Contacts</th>
                       <td mat-cell *matCellDef="let c">{{ c.contactCount }}</td>
                     </ng-container>
                     <ng-container matColumnDef="created">
-                      <th mat-header-cell *matHeaderCellDef>Created</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="createdAt">Created</th>
                       <td mat-cell *matCellDef="let c">{{ c.createdAt | date:'mediumDate' }}</td>
                     </ng-container>
-                    <tr mat-header-row *matHeaderRowDef="['name','status','contacts','created']"></tr>
-                    <tr mat-row *matRowDef="let row; columns: ['name','status','contacts','created'];"></tr>
+                    <tr mat-header-row *matHeaderRowDef="['name','gmailEmail','status','contacts','created']"></tr>
+                    <tr mat-row *matRowDef="let row; columns: ['name','gmailEmail','status','contacts','created'];"></tr>
                   </table>
-                  @if (campaigns.length === 0) {
+                  @if (campaignsDS.data.length === 0) {
                     <p class="empty-msg">No campaigns yet.</p>
                   }
                 }
 
                 <!-- Contacts panel -->
                 @if (activePanel === 'contacts' && !panelLoading) {
-                  <table mat-table [dataSource]="contacts" class="panel-table">
+                  <table mat-table [dataSource]="contactsDS" matSort #contactsSort="matSort" class="panel-table">
                     <ng-container matColumnDef="name">
-                      <th mat-header-cell *matHeaderCellDef>Name</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="name">Name</th>
                       <td mat-cell *matCellDef="let c">{{ c.name }}</td>
                     </ng-container>
                     <ng-container matColumnDef="email">
-                      <th mat-header-cell *matHeaderCellDef>Email</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="email">Email</th>
                       <td mat-cell *matCellDef="let c">{{ c.email }}</td>
                     </ng-container>
                     <ng-container matColumnDef="role">
-                      <th mat-header-cell *matHeaderCellDef>Role</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="role">Role</th>
                       <td mat-cell *matCellDef="let c">{{ c.role }}</td>
                     </ng-container>
                     <ng-container matColumnDef="company">
-                      <th mat-header-cell *matHeaderCellDef>Company</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="company">Company</th>
                       <td mat-cell *matCellDef="let c">{{ c.company }}</td>
                     </ng-container>
                     <tr mat-header-row *matHeaderRowDef="['name','email','role','company']"></tr>
                     <tr mat-row *matRowDef="let row; columns: ['name','email','role','company'];"></tr>
                   </table>
-                  @if (contacts.length === 0) {
+                  @if (contactsDS.data.length === 0) {
                     <p class="empty-msg">No contacts yet.</p>
                   }
                 }
 
                 <!-- Email jobs panels (sent / scheduled / failed) -->
                 @if ((activePanel === 'sent' || activePanel === 'scheduled' || activePanel === 'failed') && !panelLoading) {
-                  <table mat-table [dataSource]="emailJobs" class="panel-table">
+                  <div class="filter-row">
+                    <mat-form-field appearance="outline" class="filter-field">
+                      <mat-label>Filter by email sender</mat-label>
+                      <input matInput [(ngModel)]="senderFilter" (ngModelChange)="applyFilter($event)"
+                             placeholder="e.g. john@example.com">
+                      <mat-icon matSuffix>search</mat-icon>
+                    </mat-form-field>
+                  </div>
+                  <table mat-table [dataSource]="jobsDS" matSort #jobsSort="matSort" class="panel-table">
                     <ng-container matColumnDef="contact">
-                      <th mat-header-cell *matHeaderCellDef>Contact</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="contactName">Contact</th>
                       <td mat-cell *matCellDef="let j">
                         <strong>{{ j.contactName }}</strong>
                         <div class="sub">{{ j.contactEmail }}</div>
                       </td>
                     </ng-container>
                     <ng-container matColumnDef="campaign">
-                      <th mat-header-cell *matHeaderCellDef>Campaign</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="campaignName">Campaign</th>
                       <td mat-cell *matCellDef="let j">
                         <a [routerLink]="['/campaigns', j.campaignId]" class="link">{{ j.campaignName }}</a>
                       </td>
                     </ng-container>
                     <ng-container matColumnDef="step">
-                      <th mat-header-cell *matHeaderCellDef>Step</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="stepNumber">Step</th>
                       <td mat-cell *matCellDef="let j">{{ j.stepNumber }}</td>
                     </ng-container>
                     <ng-container matColumnDef="subject">
-                      <th mat-header-cell *matHeaderCellDef>Subject</th>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="subject">Subject</th>
                       <td mat-cell *matCellDef="let j">{{ j.subject }}</td>
                     </ng-container>
+                    <ng-container matColumnDef="sender">
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="sender">Email Sender</th>
+                      <td mat-cell *matCellDef="let j">{{ gmailStatus?.connectedEmail ?? '—' }}</td>
+                    </ng-container>
                     <ng-container matColumnDef="time">
-                      <th mat-header-cell *matHeaderCellDef>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="time">
                         {{ activePanel === 'sent' ? 'Sent At' : 'Scheduled For' }}
                       </th>
                       <td mat-cell *matCellDef="let j">
@@ -269,7 +289,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     <tr mat-header-row *matHeaderRowDef="jobColumns"></tr>
                     <tr mat-row *matRowDef="let row; columns: jobColumns;"></tr>
                   </table>
-                  @if (emailJobs.length === 0) {
+                  @if (jobsDS.data.length === 0) {
                     <p class="empty-msg">No {{ activePanel }} emails.</p>
                   }
                 }
@@ -343,6 +363,8 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
     }
     .panel-loading { display: flex; justify-content: center; padding: 32px; }
     .panel-table { width: 100%; }
+    .filter-row { display: flex; align-items: center; padding-bottom: 4px; }
+    .filter-field { width: 320px; }
     .link { color: #1a73e8; text-decoration: none; font-weight: 500; &:hover { text-decoration: underline; } }
     .sub { font-size: 11px; color: #9aa0a6; }
     .empty-msg { text-align: center; color: #9aa0a6; padding: 24px; font-size: 14px; }
@@ -373,9 +395,31 @@ export class DashboardComponent implements OnInit {
   activePanel: Panel = null;
   panelLoading = false;
 
-  campaigns: Campaign[] = [];
-  contacts: Contact[] = [];
-  emailJobs: EmailJob[] = [];
+  campaignsDS = new MatTableDataSource<Campaign>();
+  contactsDS  = new MatTableDataSource<Contact>();
+  jobsDS      = new MatTableDataSource<EmailJob>();
+
+  senderFilter = '';
+
+  // Setter-based ViewChild so sort attaches as soon as the conditional table renders
+  @ViewChild('campaignsSort') set campaignsSortSetter(s: MatSort) {
+    if (s) this.campaignsDS.sort = s;
+  }
+  @ViewChild('contactsSort') set contactsSortSetter(s: MatSort) {
+    if (s) this.contactsDS.sort = s;
+  }
+  @ViewChild('jobsSort') set jobsSortSetter(s: MatSort) {
+    if (s) {
+      this.jobsDS.sortingDataAccessor = (item: EmailJob, prop: string) => {
+        switch (prop) {
+          case 'time':   return this.activePanel === 'sent' ? (item.sentAt ?? '') : (item.scheduledAt ?? '');
+          case 'sender': return this.gmailStatus?.connectedEmail ?? '';
+          default:       return (item as any)[prop] ?? '';
+        }
+      };
+      this.jobsDS.sort = s;
+    }
+  }
 
   get panelTitle(): string {
     switch (this.activePanel) {
@@ -390,9 +434,9 @@ export class DashboardComponent implements OnInit {
 
   get jobColumns(): string[] {
     if (this.activePanel === 'failed') {
-      return ['contact', 'campaign', 'step', 'subject', 'time', 'error', 'actions'];
+      return ['contact', 'campaign', 'step', 'subject', 'sender', 'time', 'error', 'actions'];
     }
-    return ['contact', 'campaign', 'step', 'subject', 'time'];
+    return ['contact', 'campaign', 'step', 'subject', 'sender', 'time'];
   }
 
   constructor(
@@ -419,6 +463,7 @@ export class DashboardComponent implements OnInit {
       this.activePanel = null;
       return;
     }
+    this.senderFilter = '';
     this.activePanel = panel;
     this.loadPanel(panel!);
   }
@@ -428,41 +473,53 @@ export class DashboardComponent implements OnInit {
     switch (panel) {
       case 'campaigns':
         this.campaignService.getAll().subscribe({
-          next: c => { this.campaigns = c; this.panelLoading = false; },
+          next: c => { this.campaignsDS.data = c; this.panelLoading = false; },
           error: () => { this.panelLoading = false; }
         });
         break;
       case 'contacts':
         this.contactService.getAll().subscribe({
-          next: c => { this.contacts = c; this.panelLoading = false; },
+          next: c => { this.contactsDS.data = c; this.panelLoading = false; },
           error: () => { this.panelLoading = false; }
         });
         break;
       case 'sent':
         this.emailJobService.getAll('SENT').subscribe({
-          next: j => { this.emailJobs = j; this.panelLoading = false; },
+          next: j => { this.jobsDS.data = j; this.panelLoading = false; },
           error: () => { this.panelLoading = false; }
         });
         break;
       case 'scheduled':
         this.emailJobService.getAll('SCHEDULED').subscribe({
-          next: j => { this.emailJobs = j; this.panelLoading = false; },
+          next: j => { this.jobsDS.data = j; this.panelLoading = false; },
           error: () => { this.panelLoading = false; }
         });
         break;
       case 'failed':
         this.emailJobService.getAll('FAILED').subscribe({
-          next: j => { this.emailJobs = j; this.panelLoading = false; },
+          next: j => { this.jobsDS.data = j; this.panelLoading = false; },
           error: () => { this.panelLoading = false; }
         });
         break;
     }
   }
 
+  applyFilter(value: string): void {
+    const filter = value.trim().toLowerCase();
+    const sender = this.gmailStatus?.connectedEmail?.toLowerCase() ?? '';
+    this.jobsDS.filterPredicate = (job: EmailJob, f: string) =>
+      job.contactName.toLowerCase().includes(f) ||
+      job.contactEmail.toLowerCase().includes(f) ||
+      job.campaignName.toLowerCase().includes(f) ||
+      job.subject.toLowerCase().includes(f) ||
+      sender.includes(f);
+    this.jobsDS.filter = filter;
+  }
+
   retryJob(job: EmailJob): void {
     this.emailJobService.retry(job.id).subscribe({
       next: () => {
-        this.emailJobService.getAll('FAILED').subscribe(j => this.emailJobs = j);
+        this.emailJobService.getAll('FAILED').subscribe(j => this.jobsDS.data = j);
         this.dashboardService.getStats().subscribe(s => this.stats = s);
       }
     });

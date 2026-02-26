@@ -8,6 +8,7 @@ export interface GmailSessionStatus {
   connectError: string | null;
   sessionCreatedAt: string | null;
   message: string;
+  connectedEmail?: string;
 }
 
 @Injectable({ providedIn: 'root' })

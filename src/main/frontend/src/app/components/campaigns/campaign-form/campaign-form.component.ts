@@ -13,6 +13,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService, ExcelImportResult } from '../../../services/campaign.service';
+import { SettingsService, GmailSessionStatus } from '../../../services/settings.service';
 
 @Component({
   selector: 'app-campaign-form',
@@ -55,11 +56,16 @@ import { CampaignService, ExcelImportResult } from '../../../services/campaign.s
 
               <div class="session-notice">
                 <mat-icon class="notice-icon">info</mat-icon>
-                <span>
-                  Emails are sent using the Gmail session configured in
-                  <a routerLink="/settings">Settings</a>.
-                  No credentials needed here.
-                </span>
+                <div>
+                  @if (gmailStatus?.connectedEmail) {
+                    Emails will be sent from <strong>{{ gmailStatus!.connectedEmail }}</strong>
+                    (Gmail session configured in <a routerLink="/settings">Settings</a>).
+                  } @else {
+                    Emails are sent using the Gmail session configured in
+                    <a routerLink="/settings">Settings</a>.
+                    No credentials needed here.
+                  }
+                </div>
               </div>
 
               <mat-divider style="margin: 8px 0"></mat-divider>
@@ -305,6 +311,7 @@ export class CampaignFormComponent implements OnInit {
   selectedFile: File | null = null;
   gsheetUrl = '';
   importResult: ExcelImportResult | null = null;
+  gmailStatus: GmailSessionStatus | null = null;
 
   // Token display strings (avoids Angular treating {{...}} as interpolation bindings)
   readonly tokenName = '{{name}}';
@@ -319,6 +326,7 @@ export class CampaignFormComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private campaignService: CampaignService,
+    private settingsService: SettingsService,
     private router: Router,
     private route: ActivatedRoute,
     private snackBar: MatSnackBar
@@ -332,6 +340,7 @@ export class CampaignFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
     const id = this.route.snapshot.paramMap.get('id');
     if (id && id !== 'new') {
       this.editId = +id;

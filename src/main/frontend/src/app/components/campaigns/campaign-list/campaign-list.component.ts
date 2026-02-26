@@ -12,6 +12,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService } from '../../../services/campaign.service';
+import { SettingsService, GmailSessionStatus } from '../../../services/settings.service';
 import { Campaign } from '../../../models/campaign.model';
 
 @Component({
@@ -50,8 +51,8 @@ import { Campaign } from '../../../models/campaign.model';
                 </ng-container>
 
                 <ng-container matColumnDef="gmailEmail">
-                  <th mat-header-cell *matHeaderCellDef>Gmail Account</th>
-                  <td mat-cell *matCellDef="let c">{{ c.gmailEmail }}</td>
+                  <th mat-header-cell *matHeaderCellDef>Email Sender</th>
+                  <td mat-cell *matCellDef="let c">{{ c.gmailEmail || gmailStatus?.connectedEmail || '—' }}</td>
                 </ng-container>
 
                 <ng-container matColumnDef="contacts">
@@ -145,16 +146,19 @@ import { Campaign } from '../../../models/campaign.model';
 })
 export class CampaignListComponent implements OnInit {
   campaigns: Campaign[] = [];
+  gmailStatus: GmailSessionStatus | null = null;
   loading = true;
   displayedColumns = ['name', 'gmailEmail', 'contacts', 'status', 'createdAt', 'actions'];
 
   constructor(
     private campaignService: CampaignService,
+    private settingsService: SettingsService,
     private snackBar: MatSnackBar,
     private router: Router
   ) {}
 
   ngOnInit(): void {
+    this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
     this.load();
   }
 
