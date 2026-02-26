@@ -34,6 +34,13 @@ export class SettingsService {
     return this.http.post<GmailSessionStatus>(`${this.base}/gmail/upload-session`, fd);
   }
 
+  /** Converts Cookie Editor JSON array to Playwright session format and saves it. */
+  importCookies(json: string): Observable<GmailSessionStatus> {
+    return this.http.post<GmailSessionStatus>(`${this.base}/gmail/import-cookies`, json, {
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  }
+
   disconnectGmail(): Observable<GmailSessionStatus> {
     return this.http.delete<GmailSessionStatus>(`${this.base}/gmail/disconnect`);
   }

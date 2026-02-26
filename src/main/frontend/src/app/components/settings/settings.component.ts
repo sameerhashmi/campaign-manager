@@ -192,6 +192,48 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           </mat-card-actions>
         </mat-card>
 
+        <!-- Option 4: Cookie Editor (no install required) -->
+        <mat-card class="info-card" style="margin-top:24px">
+          <mat-card-header>
+            <div mat-card-avatar class="cookie-avatar">
+              <mat-icon>cookie</mat-icon>
+            </div>
+            <mat-card-title>Connect via Gmail Cookies</mat-card-title>
+            <mat-card-subtitle>
+              No Java, no Node — works from any browser. Takes about 2 minutes.
+            </mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            <ol class="steps-list">
+              <li>
+                Install the free
+                <a href="https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalyna"
+                   target="_blank" rel="noopener" class="ext-link">
+                  Cookie Editor Chrome extension
+                </a>
+              </li>
+              <li>Log into <strong>Gmail</strong> in your browser (make sure the inbox is visible)</li>
+              <li>Click the Cookie Editor icon in your toolbar → <strong>Export → Export All</strong></li>
+              <li>Paste the copied JSON below and click <strong>Connect with Cookies</strong></li>
+            </ol>
+            <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
+              <mat-label>Paste Cookie Editor export here</mat-label>
+              <textarea matInput [(ngModel)]="cookieJson" rows="6"
+                        placeholder='[{"domain":".google.com","name":"SID","value":"..."}]'></textarea>
+              <mat-hint>Paste the JSON array copied from Cookie Editor → Export All</mat-hint>
+            </mat-form-field>
+          </mat-card-content>
+          <mat-divider></mat-divider>
+          <mat-card-actions>
+            <button mat-raised-button color="primary"
+                    [disabled]="!cookieJson.trim() || uploading"
+                    (click)="saveCookieJson()">
+              <mat-icon>vpn_key</mat-icon>
+              {{ uploading ? 'Connecting…' : 'Connect with Cookies' }}
+            </button>
+          </mat-card-actions>
+        </mat-card>
+
       </div>
     </app-nav>
   `,
@@ -233,6 +275,12 @@ import { switchMap, takeWhile } from 'rxjs/operators';
       border-radius: 50%; width: 40px; height: 40px;
     }
     .paste-avatar mat-icon { color: white; }
+    .cookie-avatar {
+      background: #f9ab00; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; width: 40px; height: 40px;
+    }
+    .cookie-avatar mat-icon { color: white; }
+    .ext-link { color: #1a73e8; font-weight: 600; }
     .cloud-notice {
       display: flex; align-items: center; gap: 10px;
       background: #e8f0fe; border-radius: 6px;
@@ -246,6 +294,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   loading = true;
   uploading = false;
   pastedJson = '';
+  cookieJson = '';
   private pollSub?: Subscription;
 
   constructor(
@@ -337,6 +386,34 @@ export class SettingsComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.uploading = false;
         const msg = err?.error?.message ?? 'Save failed. Make sure the JSON is a valid gmail-session.json.';
+        this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
+      }
+    });
+  }
+
+  saveCookieJson(): void {
+    const trimmed = this.cookieJson.trim();
+    try {
+      JSON.parse(trimmed);
+    } catch {
+      this.snackBar.open('Invalid JSON — paste the Cookie Editor export (an array starting with [).', 'Close', {
+        duration: 6000, panelClass: 'snack-error'
+      });
+      return;
+    }
+    this.uploading = true;
+    this.settingsService.importCookies(trimmed).subscribe({
+      next: s => {
+        this.status = s;
+        this.uploading = false;
+        this.cookieJson = '';
+        this.snackBar.open('Gmail cookies imported — connected!', '', {
+          duration: 5000, panelClass: 'snack-success'
+        });
+      },
+      error: err => {
+        this.uploading = false;
+        const msg = err?.error?.message ?? 'Import failed. Make sure you exported all cookies from Gmail.';
         this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });

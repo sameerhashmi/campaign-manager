@@ -3,6 +3,10 @@ package com.campaignmanager.controller;
 import com.campaignmanager.dto.GmailSessionStatusDto;
 import com.campaignmanager.service.PlaywrightSessionService;
 import com.campaignmanager.service.PlaywrightSystemDepsInstaller;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -116,6 +120,83 @@ public class SettingsController {
             dto.setMessage("Upload failed: " + e.getMessage());
             return ResponseEntity.internalServerError().body(dto);
         }
+    }
+
+    /**
+     * Accepts cookies exported by the "Cookie Editor" Chrome extension (a JSON array)
+     * and converts them to the Playwright storageState format ({cookies:[...],origins:[]}).
+     * This allows non-technical users to establish a Gmail session with zero local installs:
+     * install Cookie Editor → log into Gmail → Export → paste here.
+     *
+     * Also accepts a pre-converted Playwright session JSON (passed through unchanged).
+     */
+    @PostMapping("/gmail/import-cookies")
+    public ResponseEntity<GmailSessionStatusDto> importCookies(@RequestBody String cookieEditorJson) {
+        try {
+            String playwrightJson = convertCookieEditorToPlaywright(cookieEditorJson);
+            Path sessionPath = sessionService.getSessionPath();
+            Files.createDirectories(sessionPath.getParent());
+            Files.writeString(sessionPath, playwrightJson);
+            sessionService.invalidateCachedContext();
+            log.info("Gmail session imported from Cookie Editor JSON ({} chars)", playwrightJson.length());
+            sessionService.detectEmailInBackground();
+            GmailSessionStatusDto dto = buildStatus();
+            dto.setMessage("Gmail cookies imported successfully. Gmail is now connected.");
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            log.error("Cookie import failed: {}", e.getMessage());
+            GmailSessionStatusDto dto = new GmailSessionStatusDto();
+            dto.setConnected(false);
+            dto.setMessage("Cookie import failed: " + e.getMessage());
+            return ResponseEntity.badRequest().body(dto);
+        }
+    }
+
+    /**
+     * Converts a Cookie Editor JSON array to Playwright storageState format.
+     * If the input is already a Playwright object (has "cookies" key), returns it unchanged.
+     */
+    private String convertCookieEditorToPlaywright(String json) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(json);
+
+        // Already Playwright format — pass through
+        if (root.isObject() && root.has("cookies")) {
+            return json;
+        }
+        if (!root.isArray()) {
+            throw new IllegalArgumentException(
+                    "Expected a JSON array from Cookie Editor export, or a Playwright session object.");
+        }
+
+        ArrayNode playwrightCookies = mapper.createArrayNode();
+        for (JsonNode c : root) {
+            ObjectNode pc = mapper.createObjectNode();
+            pc.put("name",     c.path("name").asText());
+            pc.put("value",    c.path("value").asText());
+            pc.put("domain",   c.path("domain").asText());
+            pc.put("path",     c.path("path").asText("/"));
+            pc.put("httpOnly", c.path("httpOnly").asBoolean(false));
+            pc.put("secure",   c.path("secure").asBoolean(false));
+            // session cookies have no persistent expiry → -1 means session-scoped in Playwright
+            if (c.has("expirationDate") && !c.path("session").asBoolean(false)) {
+                pc.put("expires", c.path("expirationDate").asLong());
+            } else {
+                pc.put("expires", -1L);
+            }
+            String sameSite = c.path("sameSite").asText("no_restriction");
+            pc.put("sameSite", switch (sameSite.toLowerCase()) {
+                case "strict" -> "Strict";
+                case "lax"    -> "Lax";
+                default       -> "None";
+            });
+            playwrightCookies.add(pc);
+        }
+
+        ObjectNode result = mapper.createObjectNode();
+        result.set("cookies", playwrightCookies);
+        result.putArray("origins");
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
     }
 
     private GmailSessionStatusDto buildStatus() {
