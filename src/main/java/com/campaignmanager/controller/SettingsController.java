@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/settings")
@@ -131,8 +132,9 @@ public class SettingsController {
      * Also accepts a pre-converted Playwright session JSON (passed through unchanged).
      */
     @PostMapping("/gmail/import-cookies")
-    public ResponseEntity<GmailSessionStatusDto> importCookies(@RequestBody String cookieEditorJson) {
+    public ResponseEntity<GmailSessionStatusDto> importCookies(@RequestBody Map<String, String> body) {
         try {
+            String cookieEditorJson = body.getOrDefault("cookieJson", "");
             String playwrightJson = convertCookieEditorToPlaywright(cookieEditorJson);
             Path sessionPath = sessionService.getSessionPath();
             Files.createDirectories(sessionPath.getParent());
