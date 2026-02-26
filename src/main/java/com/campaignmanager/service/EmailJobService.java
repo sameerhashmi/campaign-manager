@@ -44,8 +44,8 @@ public class EmailJobService {
     public EmailJobDto retry(Long id) {
         EmailJob job = emailJobRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Email job not found: " + id));
-        if (job.getStatus() != EmailJobStatus.FAILED) {
-            throw new RuntimeException("Only FAILED jobs can be retried");
+        if (job.getStatus() != EmailJobStatus.FAILED && job.getStatus() != EmailJobStatus.SKIPPED) {
+            throw new RuntimeException("Only FAILED or SKIPPED jobs can be retried");
         }
         job.setStatus(EmailJobStatus.SCHEDULED);
         job.setScheduledAt(LocalDateTime.now());

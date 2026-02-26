@@ -11,5 +11,6 @@ public class GmailSessionStatusDto {
     private String connectError;  // last error from a failed connect attempt
     private LocalDateTime sessionCreatedAt;
     private String message;
-    private String connectedEmail; // Gmail account email of the active session
+    private String connectedEmail;    // Gmail account email of the active session
+    private boolean cloudEnvironment; // true when running on CF / headless (no display server)
 }

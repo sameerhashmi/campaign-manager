@@ -1,494 +1,177 @@
-# Campaign Manager
+# 📧 Campaign Manager
 
-A full-stack email campaign management application built with **Spring Boot 3** and **Angular 17**. Automates sending personalized email sequences via **Gmail web UI using Playwright**. Everything ships as a **single runnable JAR** — no separate frontend server needed.
-
----
-
-## Features
-
-- **Campaign Dashboard** — Stats cards showing campaigns, contacts, emails sent/pending/failed with sortable, filterable tables
-- **Campaign Management** — Create, launch, pause, and resume campaigns with sender email displayed throughout
-- **Per-Contact Email Scheduling** — Each contact gets their own 7-email schedule with individual send dates read directly from the import sheet
-- **Google Doc Email Bodies** — Email content is fetched from a private Google Doc (one doc per contact) at import time using the connected Gmail session — no separate OAuth setup needed
-- **Personalization Tokens** — Use `{{name}}`, `{{title}}`, `{{role}}`, `{{company}}`, `{{play}}` in subject and body
-- **Contact Fields** — Name, Title/Role, Email, Phone, Play, Sub Play, AE/SA, Email Link (Google Doc URL), Company, Category
-- **Two Import Methods** — Upload an `.xlsx` file or paste a Google Sheets URL directly in the UI
-- **Gmail Session Login** — Log in to Gmail once via Settings; Playwright saves the session and reuses it for all sends — no stored passwords
-- **Status Tracking** — Every email job shows SCHEDULED, SENT, SKIPPED, FAILED status with retry/send-now support for FAILED and SKIPPED jobs
-- **Past-Date Skip** — Jobs with a scheduled date already in the past are automatically marked SKIPPED at import time
-- **Opt-Out Support** — Rows with `Opt Out = Y` in the import sheet are skipped entirely
-- **Single JAR Deployment** — Angular is bundled into the Spring Boot JAR at build time
-- **Eastern Time Scheduling** — Server runs on `America/New_York` — enter all dates in EST, no UTC conversion needed
+> Automated email campaign manager built with **Spring Boot 3** + **Angular 17**.
+> Sends personalized sequences via **Gmail automation (Playwright)** — ships as a single runnable JAR.
 
 ---
 
-## Prerequisites
+## ✨ Features
 
-| Tool | Version | Notes |
-|------|---------|-------|
-| Java | 17+ | OpenJDK or Oracle JDK |
-| Maven | 3.8+ | Or use the included `mvnw` wrapper |
-| Git | Any | To clone the repository |
-
-> **Node.js is NOT required globally** — the build downloads Node 20 automatically via `frontend-maven-plugin`.
+| | Feature |
+|---|---|
+| 📊 | Sortable, filterable Dashboard with campaign and email job stats |
+| 📅 | Per-contact 7-email schedules with individual send dates from the spreadsheet |
+| 📄 | Personalized email bodies fetched from private **Google Docs** at import time |
+| 🔑 | Gmail session login — log in once, no passwords stored |
+| 📋 | Import from **Google Sheets URL** or **.xlsx file** |
+| ⏭️ | Past-date jobs auto-marked SKIPPED; retry or send-now from the UI |
+| 🚫 | `Opt Out = Y` rows skipped entirely at import |
+| ☁️ | One-command CF/TAS deployment — single JAR, no extra servers |
+| 🕐 | All times in **Eastern Time (EST/EDT)** |
 
 ---
 
-## Setup
-
-### 1. Clone the repository
+## 🚀 Quick Start
 
 ```bash
+# 1. Clone
 git clone https://github.com/sameerhashmi/campaign-manager.git
 cd campaign-manager
-```
 
-### 2. Build
-
-```bash
+# 2. Build (downloads Node 20 automatically — no local Node needed)
 mvn package -DskipTests
-```
 
-This will:
-1. Download Node 20 + npm (first time only)
-2. Install Angular dependencies (`npm install`)
-3. Build Angular (`ng build`) → output into `src/main/resources/static/`
-4. Package everything into `target/campaign-manager-1.0.0.jar`
-
-### 3. Run
-
-```bash
+# 3. Run
 java -jar target/campaign-manager-1.0.0.jar
 ```
 
-Open your browser at: **http://localhost:8080**
-
-### 4. Default login credentials
-
-| Username | Password |
-|----------|----------|
-| `admin`  | `admin123` |
-
-> Change these in `DataInitializer.java` before deploying.
+Open **http://localhost:8080** — login: `admin` / `admin123`
 
 ---
 
-## Application Screen Layout
-
-### Sidebar Navigation
-
-The left sidebar provides navigation to all main sections:
+## 📁 Project Structure
 
 ```
-[Campaign Manager logo]
-──────────────────────
-  Dashboard
-  Campaigns
-  Contacts
-  Settings
-──────────────────────
-  [Logout]
-```
-
-### Dashboard
-
-Stats overview cards at the top:
-
-```
-┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-│  Total          │ │  Active         │ │  Emails Sent    │ │  Pending        │
-│  Campaigns      │ │  Campaigns      │ │  (All Time)     │ │  (Scheduled)    │
-└─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘
-```
-
-Below the cards: sortable, filterable tables for:
-- **Campaigns** — Name, Email Sender, Contacts, Status, Created
-- **Email Jobs (Sent / Scheduled / Failed)** — Contact, Campaign, Step, Subject, Email Sender, Time — with search filter
-
----
-
-### Campaign Detail — 3 Tabs
-
-When you open a campaign you see three tabs:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  [Campaign Name]                          [Launch] [Pause]│
-├──────────┬──────────────────────┬─────────────────────────┤
-│ Overview │ Contacts (N)         │ Email Jobs (N)           │
-└──────────┴──────────────────────┴─────────────────────────┘
-```
-
-#### Tab 1 — Overview
-
-Edit campaign name, view sender email address (from the connected Gmail session), and manage campaign status.
-
-#### Tab 2 — Contacts
-
-Import contacts using Google Sheets or add individual contacts:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Import from Google Sheet                                        │
-│  ┌─────────────────────────────────────┐ [Add from Sheet]       │
-│  │ Paste Google Sheets URL here...      │ [Replace with Sheet]  │
-│  └─────────────────────────────────────┘                        │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │ Add individual contact                                    │   │
-│  │ [Contact dropdown ▼]              [Add Contact]          │   │
-│  └──────────────────────────────────────────────────────────┘   │
-├──────────────────────────────────────────────────────────────────┤
-│ NAME        EMAIL              TITLE       PLAY    ACTIONS       │
-│ Jane Doe    jane@acme.com      VP Sales    Tanzu   [Remove]      │
-│ John Smith  john@acme.com      Director    Aria    [Remove]      │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-#### Tab 3 — Email Jobs
-
-View all scheduled/sent/failed/skipped email jobs for this campaign. FAILED and SKIPPED jobs have a **Send Now / Retry** button to immediately trigger the email.
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ CONTACT     STEP  SUBJECT              SCHEDULED         STATUS   ACTIONS     │
-│ Jane Doe    1     Hi Jane, quick...   2/26/2026 9:00    SCHEDULED            │
-│ Jane Doe    2     Following up...     3/2/2026  9:00    SCHEDULED            │
-│ Jane Doe    3     One more thought    3/9/2026  9:00    SCHEDULED            │
-│ John Smith  1     Hi John, quick...   2/26/2026 9:00    SENT      2/26 9:01  │
-│ John Smith  2     Following up...     3/2/2026  9:00    SCHEDULED            │
-│ ...                                                                           │
-│ Old Contact 1     Re: Tanzu demo      1/15/2026 9:00    SKIPPED   [Send Now] │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-Status chip colors: **SCHEDULED** (blue) · **SENT** (green) · **FAILED** (red) · **SKIPPED** (grey)
-
----
-
-### Settings Page
-
-```
-┌────────────────────────────────────────┐
-│ Gmail Session                          │
-│ Status: ● Connected (since 2/25/2026)  │
-│ [Connect Gmail]  [Disconnect]          │
-│ [Upload Session File]                  │
-│ [Paste Session JSON]                   │
-└────────────────────────────────────────┘
+campaign-manager/
+├── pom.xml                         # Maven build + frontend-maven-plugin
+├── manifest.yml                    # CF deployment manifest
+├── scripts/
+│   └── capture-gmail-session.js   # Node.js script to capture Gmail session locally
+├── examples/
+│   └── sample.xlsx                 # Sample import spreadsheet
+└── src/main/
+    ├── java/com/campaignmanager/
+    │   ├── controller/             # REST API controllers
+    │   ├── service/
+    │   │   ├── PlaywrightGmailService.java       # Email sending via Gmail UI
+    │   │   ├── PlaywrightSessionService.java      # Session management
+    │   │   ├── GoogleDocParserService.java        # Fetch + parse Google Doc email sections
+    │   │   ├── ExcelImportService.java            # Excel / Google Sheets import
+    │   │   └── PlaywrightSystemDepsInstaller.java # Chromium libs installer for CF
+    │   ├── model/ dto/ repository/ scheduler/
+    │   └── security/               # JWT auth
+    └── frontend/                   # Angular 17 source
+        └── src/app/
+            ├── components/         # Dashboard, Campaigns, Contacts, Settings
+            └── services/           # HTTP API clients
 ```
 
 ---
 
-## First-Time Gmail Setup
+## 📬 Gmail Setup
 
-Before sending any emails you need to connect your Gmail account once.
+### Option A — Local (browser login)
 
-### Option A — Connect directly (local only)
+1. Go to **Settings → Connect Gmail**
+2. Log in to Gmail in the Chrome window that opens
+3. Session is saved automatically — done
 
-1. Log into the app and navigate to **Settings** (gear icon in the sidebar)
-2. Click **Connect Gmail**
-3. A Chromium browser window opens — log into your Gmail account normally
-4. Once you reach the Gmail inbox, the session is automatically saved
-5. The Settings page shows **Connected** — you're done
+### Option B — Cloud / Headless (upload session file)
 
-> **If Gmail prompts for 2-factor auth**, complete it in the browser window. The app waits up to 2 minutes.
+> Use this for CF/TAS where no display server is available.
 
-### Option B — Capture session locally, upload to cloud
-
-Use this when running on Cloud Foundry / Tanzu where no display server is available.
-
-**Step 1 — Generate the session file locally (choose one):**
-
-**Method 1 — Run the app JAR locally:**
-1. `java -jar target/campaign-manager-1.0.0.jar`
-2. Open **http://localhost:8080 → Settings → Connect Gmail**
-3. Log in to Gmail in the Chrome window that opens
-4. Session saved to `./data/gmail-session.json`
-
-**Method 2 — Standalone Node.js script (no Java needed):**
+**Step 1** — Capture session locally:
 ```bash
-npm install playwright
-npx playwright install chromium
+# Method 1: Run the JAR locally
+java -jar target/campaign-manager-1.0.0.jar
+# → Settings → Connect Gmail → login → session saved to ./data/gmail-session.json
+
+# Method 2: Node.js script (no Java needed)
+npm install playwright && npx playwright install chromium
 node scripts/capture-gmail-session.js
 ```
-Session saved to `./data/gmail-session.json`
 
-**Step 2 — Upload to the cloud app (choose one):**
+**Step 2** — Upload to cloud app:
+- Settings page → **Upload Session File** → select `gmail-session.json`
 
-**Option 1 — Upload via Settings UI (recommended):**
-1. Open your cloud app → **Settings**
-2. Click **Upload Session File** → select `gmail-session.json`
-
-**Option 2 — Paste JSON in the browser:**
-1. Open `gmail-session.json` in a text editor and copy all the contents
-2. Open your cloud app → **Settings** → scroll to **Paste Session JSON**
-3. Paste the JSON and click **Save Session**
-
-**Option 3 — Upload via curl:**
-```bash
-TOKEN=$(curl -s -X POST https://<your-app>/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' | jq -r '.token')
-
-curl -X POST https://<your-app>/api/settings/gmail/upload-session \
-  -H "Authorization: Bearer $TOKEN" \
-  -F "file=@./data/gmail-session.json"
-```
-
-> **Note:** The Gmail session is stored in the container's ephemeral filesystem. It is lost on app restart/restage — re-upload after each restart.
+> ⚠️ The session is stored in the container's ephemeral filesystem — re-upload after each CF restart.
 
 ---
 
-## Creating a Campaign (Step-by-Step)
+## 📊 Import Format
 
-1. **Connect Gmail** in Settings (one-time setup above)
-2. Go to **Campaigns → New Campaign**
-3. Enter a campaign name and click **Create Campaign**
-4. In the campaign detail, go to the **Contacts** tab
-5. Import contacts using one of:
-   - **Import from Google Sheet** — paste a Google Sheets URL; the app downloads it using the connected Gmail session
-   - **Add individual contact** — select from the contact dropdown and click Add Contact
-6. Click **Launch** to set the campaign to ACTIVE
-7. The scheduler checks for due jobs every 60 seconds and sends them via Gmail automation
-8. Monitor status in the **Email Jobs** tab (SCHEDULED → SENT or FAILED/SKIPPED with retry)
+### Spreadsheet (one row = one contact)
 
-> **Note:** All email jobs are created at import time with individual scheduled dates per contact. Launching just marks the campaign ACTIVE so the scheduler will pick up due jobs.
-
----
-
-## Excel / Google Sheets Import Format
-
-Each row in the spreadsheet = one contact with their own 7-email schedule and a unique Google Doc containing personalized email bodies for that person.
-
-**Auto-detected** when the sheet contains both an `Email Link` column and an `Email 1` column.
-
-### Required Column Headers
+Auto-detected when the sheet has both an **`Email Link`** and **`Email 1`** column.
 
 | Column | Required | Description |
 |--------|----------|-------------|
-| `Name` | Yes | Contact full name |
-| `Title` | No | Job title (maps to `role` / `{{title}}` token) |
-| `Email` | Yes | Email address (used as unique key — duplicate rows update the existing contact) |
-| `Phone` | No | Phone number |
-| `Play` | No | Sales play (e.g. "Tanzu") |
-| `Sub Play` | No | Sub-play (e.g. "Generic") |
-| `AE/SA` | No | Role designation |
-| `Email Link` | Yes | URL of the contact's private Google Doc containing the 7 email sections |
-| `Email 1` | Yes | Send date/time for email step 1 (Eastern Time) |
-| `Email 2`–`Email 7` | No | Send date/time for email steps 2–7 (leave blank to skip that step) |
-| `Opt Out` | No | Set to `Y` to skip this row entirely — no contact or jobs created |
+| `Name` | ✅ | Full name |
+| `Email` | ✅ | Email address (upsert key) |
+| `Title` | | Job title → `{{title}}` token |
+| `Phone` | | Phone number |
+| `Play` | | Sales play (e.g. Tanzu) |
+| `Sub Play` | | Sub-play |
+| `AE/SA` | | Role designation |
+| `Email Link` | ✅ | Google Doc URL with 7 email sections |
+| `Email 1`–`Email 7` | ✅ | Send date/time per step (Eastern Time) |
+| `Opt Out` | | `Y` = skip this row entirely |
 
-### Date/Time Format
-
-All dates are interpreted as **Eastern Time (EST/EDT)** — enter times in your local time if you are in the Eastern timezone.
-
-Supported date formats in the spreadsheet:
-
-| Format | Example |
-|--------|---------|
-| `M/d/yyyy H:mm:ss` | `2/26/2026 14:00:00` |
-| `M/d/yyyy H:mm` | `2/26/2026 14:00` |
-| `M/d/yy H:mm:ss` | `2/26/26 14:00:00` |
-| `M/d/yy H:mm` | `2/26/26 14:00` |
-| `yyyy-MM-dd HH:mm:ss` | `2026-02-26 14:00:00` |
-| `yyyy-MM-dd HH:mm` | `2026-02-26 14:00` |
-
-> **Important:** Jobs with a date/time already in the past at import time are automatically set to **SKIPPED**. Use future dates to get **SCHEDULED** jobs. SKIPPED jobs can be manually triggered with the **Send Now** button in the Email Jobs tab.
-
-### Example Sheet Rows
-
-| Name | Title | Email | Phone | Play | Sub Play | AE/SA | Email Link | Email 1 | Email 2 | Email 3 | Opt Out |
-|------|-------|-------|-------|------|----------|-------|------------|---------|---------|---------|---------|
-| Jane Doe | VP Sales | jane@acme.com | 415-555-0100 | Tanzu | Generic | AE | https://docs.google.com/document/d/... | 2/26/2026 9:00:00 | 3/2/2026 9:00:00 | 3/9/2026 9:00:00 | |
-| John Smith | Director | john@acme.com | 212-555-0200 | Aria | Starter | SA | https://docs.google.com/document/d/... | 2/26/2026 10:00:00 | 3/2/2026 10:00:00 | | Y |
-
-> John Smith has `Opt Out = Y` — this entire row is skipped; no contact record or email jobs are created.
-
-A sample file is available at: `examples/sample.xlsx`
+**Supported date formats:** `2/26/2026 9:00:00` · `2026-02-26 09:00` · `2/26/26 9:00`
 
 ---
 
-## Google Doc Format (Email Link Column)
+### Google Doc Format (Email Link column)
 
-Each contact has their own Google Doc containing up to 7 numbered email sections. The app fetches and parses the doc **at import time** using the connected Gmail session (same Google account cookies = access to private docs owned or shared with that account). Content is stored in the database — no further doc access is needed at send time.
-
-### How the Parser Works
-
-The doc is exported as plain text (`/export?format=txt`). The parser reads it line by line, looking for section headers and subject/body content.
-
----
-
-### Section Headers
-
-A new email section starts on any line where **`Email N`** appears at the very beginning of the line (N = 1–7, case-insensitive). The description after the number is ignored.
+Each contact's Google Doc holds up to 7 email sections. Fetched at import time using the connected Gmail session — no separate OAuth needed.
 
 ```
-Email 1: Initial Outreach (Day 1)    ← starts section 1 — description ignored
-Email 2: Follow-Up (Day 4)           ← starts section 2
-Email 3                              ← also valid (no colon/description needed)
-```
-
----
-
-### Subject Line
-
-The **first non-blank line** inside a section must be the subject:
-
-```
-Subject: Quick question about {{play}}, {{name}}
-```
-
-- The `Subject:` prefix is stripped; only the text after it is used
-- If no `Subject:` line is found, the **first line of the section becomes the subject**
-
----
-
-### Body
-
-All lines after the subject line form the email body, preserved exactly (including blank lines for paragraph spacing).
-
-**Trailing separators are automatically stripped** — do not worry about them carrying into the next section:
-- Blank lines at the end of a section
-- Lines containing only `—`, `---`, `===`, `***`, or similar separator characters
-
----
-
-### Inline (Single-Line) Format
-
-All 7 emails can also be written one-per-line, with the subject and body on the same line as the section header:
-
-```
-Email 1: Initial Outreach Subject: Quick question Hi Jane, I wanted to reach out...
-Email 2: Follow-Up Subject: Following up Hi Jane, Just circling back...
-```
-
-The parser detects a greeting pattern (`Hi`, `Hello`, or `Dear` followed by a capital letter) and automatically splits the subject from the body at that point.
-
----
-
-### Complete Multi-Line Example
-
-```
-Email 1: Initial Outreach (Day 1)
+Email 1: Initial Outreach
 Subject: Quick question about {{play}}, {{name}}
 Hi {{name}},
 
-I wanted to reach out because your team is using {{play}} and I think
-there's an opportunity to help with your current initiatives.
+I wanted to reach out about your {{play}} initiatives...
 
 Best,
-Brian Stover
+Brian
 —
 
-Email 2: Follow-Up (Day 4)
+Email 2: Follow-Up
 Subject: Following up, {{name}}
 Hi {{name}},
 
-Just circling back on my previous note. Would love 15 minutes to connect.
+Just circling back...
 
 Best,
-Brian Stover
-—
-
-Email 3: Value Add (Day 8)
-Subject: One more thought, {{name}}
-Hi {{name}},
-
-Wanted to share a quick resource that might be relevant to your {{play}} work...
-
-Best,
-Brian Stover
+Brian
 —
 ```
 
----
-
-### Parsing Rules Summary
+#### Parsing rules
 
 | Rule | Detail |
 |------|--------|
-| **Section start** | Line beginning with `Email N` (case-insensitive); N = 1–7 |
-| **Description ignored** | Text after the number on the header line (e.g., `: Initial Outreach (Day 1)`) is discarded |
-| **Subject** | First non-blank line of the section starting with `Subject:` (prefix stripped) |
-| **Subject fallback** | If no `Subject:` line, the first line of the section is used as the subject |
-| **Inline greeting split** | If `Hi / Hello / Dear + Capital` is found inside the subject text, the text is split — everything before the greeting becomes the subject, everything from the greeting onward becomes the body |
-| **Body** | All lines after the subject, with blank lines preserved for paragraph spacing |
-| **Trailing separator strip** | Blank lines and separator-only lines (`—`, `---`, `===`, `***`) at the end of a section are removed |
-| **Unicode normalization** | Invisible characters (BOM, zero-width spaces, non-breaking spaces) are normalized before parsing — copy-paste from Google Docs works reliably |
-| **Missing date = skip step** | If the corresponding `Email N` column in the sheet is blank, that section is not imported even if it exists in the doc |
+| **Section start** | Line beginning with `Email N` (case-insensitive, N = 1–7) |
+| **Subject** | First line starting with `Subject:` — prefix stripped |
+| **Subject fallback** | If no `Subject:` line, first line of section is used |
+| **Inline greeting split** | `Hi / Hello / Dear + Capital` in the subject splits it — greeting onward becomes body |
+| **Trailing separators** | `—`, `---`, `===`, `***`, blank lines at section end are stripped |
+| **Unicode** | BOM, zero-width spaces, non-breaking spaces normalized automatically |
+| **Missing date = skip** | If `Email N` column is blank, that section is not imported |
+
+#### Personalization tokens
+
+| Token | Value |
+|-------|-------|
+| `{{name}}` / `{{Name}}` | Contact name |
+| `{{title}}` / `{{Title}}` | Job title |
+| `{{role}}` | Job title |
+| `{{company}}` | Company |
+| `{{play}}` | Play field |
 
 ---
 
-### Personalization Tokens
-
-Tokens in the subject and body are resolved at import time using the contact's data from the spreadsheet:
-
-| Token | Replaced with |
-|-------|--------------|
-| `{{name}}` or `{{Name}}` | Contact name |
-| `{{title}}` or `{{Title}}` | Contact title/role |
-| `{{role}}` | Contact title/role |
-| `{{company}}` | Contact company |
-| `{{play}}` | Contact play field |
-
----
-
-## Importing from Google Sheets
-
-In addition to uploading a file, paste a Google Sheets URL directly in the **Contacts** tab:
-
-1. Open the campaign → **Contacts** tab
-2. Scroll to the **Import from Google Sheet** card
-3. Paste any Google Sheets URL (share link, view link, edit link — the sheet ID is extracted automatically)
-4. Click **Add from Sheet** (additive) or **Replace with Sheet** (replaces all existing contacts and jobs)
-
-The app downloads the sheet as `.xlsx` using the connected Gmail/Google session and processes it identically to a file upload.
-
-> The sheet must be accessible to the Google account used for the Gmail session — either owned by that account or shared with it.
-
----
-
-## Application URLs
-
-| URL | Description |
-|-----|-------------|
-| http://localhost:8080 | Main application |
-| http://localhost:8080/h2-console | H2 database browser (local only) |
-| http://localhost:8080/api/dashboard/stats | Dashboard stats JSON |
-
-H2 console JDBC URL: `jdbc:h2:file:./data/campaigndb` (username: `sa`, no password)
-
----
-
-## Development Mode (Hot Reload)
-
-Run backend and frontend separately for live reload during development:
-
-**Terminal 1 — Spring Boot:**
-```bash
-mvn spring-boot:run
-```
-
-**Terminal 2 — Angular:**
-```bash
-cd src/main/frontend
-npm install    # first time only
-npm start      # ng serve with proxy to localhost:8080
-```
-
-Open: **http://localhost:4200** — Angular dev server with live reload.
-
----
-
-## Deploying to Pivotal Cloud Foundry / Tanzu Application Service
-
-### Prerequisites
-
-- CF CLI installed and authenticated (`cf login`)
-- Target org and space selected (`cf target -o <org> -s <space>`)
-
-### Deploy
+## ☁️ Cloud Foundry Deployment
 
 ```bash
 mvn package -DskipTests
@@ -496,34 +179,16 @@ cp target/campaign-manager-1.0.0.jar dist/campaign-manager-1.0.0.jar
 cf push
 ```
 
-> Always copy the JAR to `dist/` before pushing — `manifest.yml` points CF at `dist/campaign-manager-1.0.0.jar`.
+#### Key manifest settings
 
-### What the manifest configures
+| Setting | Value | Why |
+|---------|-------|-----|
+| `memory` | 2G | Chromium needs headroom |
+| `TZ` | `America/New_York` | Dates entered in Eastern Time |
+| `PLAYWRIGHT_HEADLESS` | `true` | No display server on CF |
+| `SPRING_PROFILES_ACTIVE` | `cloud` | Auto-binds MySQL via `VCAP_SERVICES` |
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| `path` | `dist/campaign-manager-1.0.0.jar` | Point directly at the JAR so `java_buildpack_offline` can detect it |
-| `memory` | 2G | Chromium needs more memory than a standard Java app |
-| `buildpacks` | `java_buildpack_offline` | Single buildpack — no `apt-buildpack` needed |
-| `PLAYWRIGHT_HEADLESS` | `true` | CF containers have no display server |
-| `PLAYWRIGHT_BROWSERS_PATH` | `/home/vcap/playwright-browsers` | Writable path for Playwright to cache browser binaries |
-| `SPRING_PROFILES_ACTIVE` | `cloud` | Activates `CloudDataSourceConfig` for MySQL auto-binding |
-| `TZ` | `America/New_York` | Server clock runs EST — enter spreadsheet dates in Eastern Time |
-
-### How Chromium system libs are installed on CF
-
-CF containers are missing several graphics libraries that Chromium requires. **`PlaywrightSystemDepsInstaller`** handles this automatically at startup:
-
-1. Runs `apt-get download` to fetch the required `.deb` packages
-2. Extracts the `.so` files into `~/playwright-system-deps/sysroot/`
-3. Passes the sysroot path as `LD_LIBRARY_PATH` to Playwright
-4. Adds `--no-sandbox` to Chromium launch args
-
-Runs once on first boot (~15 s extra startup time); skipped on subsequent boots.
-
-### Binding a persistent database (recommended)
-
-Without a bound database the app uses H2 which is wiped on every CF restart. Bind a MySQL service for persistent storage:
+#### Persistent database (recommended)
 
 ```bash
 cf create-service p.mysql db-small campaign-db
@@ -531,169 +196,66 @@ cf bind-service sh-campaign-manager campaign-db
 cf restage sh-campaign-manager
 ```
 
-`CloudDataSourceConfig` reads `VCAP_SERVICES` automatically and wires up the MySQL connection. No other config needed.
+Without a bound database, H2 is used and data is lost on every restart.
 
-### Known CF limitations
+#### Known CF limitations
 
-| Issue | Impact | Recommendation |
-|-------|--------|----------------|
-| **Ephemeral containers** | H2 database and Gmail session are wiped on restart | Bind MySQL; re-upload Gmail session after restart |
-| **No display server** | "Connect Gmail" button returns an error on CF | Use the Upload Session File / Paste JSON workflow |
-| **Browser binary download** | Playwright downloads ~120 MB of Chromium on first boot | Allow ~60 s for first startup |
-
----
-
-## Project Structure
-
-```
-campaign-manager/
-├── pom.xml                              # Maven build (includes frontend-maven-plugin)
-├── manifest.yml                         # CF deployment manifest
-├── scripts/
-│   └── capture-gmail-session.js        # Standalone Node.js script to capture Gmail session
-├── examples/
-│   ├── sample.xlsx                      # Sample import sheet (direct per-contact format)
-│   └── test.xlsx                        # Test import sheet
-├── src/
-│   └── main/
-│       ├── java/com/campaignmanager/
-│       │   ├── config/                 # Security, Web, CloudDataSourceConfig, DataInitializer
-│       │   ├── controller/             # REST API controllers
-│       │   ├── dto/                    # Data transfer objects
-│       │   ├── model/                  # JPA entities + enums
-│       │   ├── repository/             # Spring Data JPA repos
-│       │   ├── scheduler/              # Email queue processor (runs every 60s)
-│       │   ├── security/               # JWT utility + filter
-│       │   └── service/
-│       │       ├── PlaywrightSystemDepsInstaller.java  # Installs Chromium libs on CF at startup
-│       │       ├── PlaywrightSessionService.java       # Gmail session login + browser lifecycle
-│       │       ├── PlaywrightGmailService.java         # Email sending automation
-│       │       ├── GoogleDocParserService.java         # Fetches + parses Google Doc email sections
-│       │       └── ExcelImportService.java             # Excel/GSheet import (auto-detects format)
-│       ├── frontend/                   # Angular 17 source
-│       │   └── src/app/
-│       │       ├── components/         # Login, Dashboard, Campaigns, Contacts, Settings
-│       │       ├── services/           # HTTP API services
-│       │       ├── models/             # TypeScript interfaces
-│       │       ├── guards/             # Auth guard
-│       │       └── interceptors/       # JWT header interceptor
-│       └── resources/
-│           ├── application.properties
-│           ├── application-cloud.properties  # CF overrides (headless, H2 console off)
-│           └── static/                 # Angular build output (auto-generated by Maven)
-└── data/                               # Created at runtime
-    ├── campaigndb.mv.db                # H2 database file
-    └── gmail-session.json              # Playwright saved session (do not share)
-```
+| Issue | Fix |
+|-------|-----|
+| H2 + Gmail session wiped on restart | Bind MySQL; re-upload session after restart |
+| "Connect Gmail" unavailable | Settings page shows Upload Session File instead |
+| First boot slow (~60s) | Chromium downloads ~120 MB + system libs on first start |
 
 ---
 
-## REST API Reference
+## 🔌 REST API
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/auth/login` | Get JWT token |
-| GET | `/api/campaigns` | List all campaigns |
-| POST | `/api/campaigns` | Create campaign |
-| GET | `/api/campaigns/{id}` | Get campaign with templates |
-| POST | `/api/campaigns/{id}/launch` | Launch campaign |
-| POST | `/api/campaigns/{id}/pause` | Pause campaign |
-| POST | `/api/campaigns/{id}/resume` | Resume campaign |
-| GET | `/api/campaigns/{id}/contacts` | List enrolled contacts |
-| POST | `/api/campaigns/{id}/contacts` | Enroll contacts (bulk) |
-| DELETE | `/api/campaigns/{id}/contacts/{cid}` | Remove contact |
-| POST | `/api/campaigns/{id}/import-excel` | Upload `.xlsx` file (`?replace=true` to replace all) |
-| POST | `/api/campaigns/{id}/import-gsheet` | Import from Google Sheets URL (`?url=...&replace=true`) |
-| GET | `/api/campaigns/{id}/jobs` | List email jobs (`?status=SCHEDULED\|SENT\|FAILED\|SKIPPED`) |
-| GET | `/api/contacts` | List contacts (`?search=...`) |
-| POST | `/api/contacts` | Create contact |
-| PUT | `/api/contacts/{id}` | Update contact |
-| GET | `/api/settings/gmail/status` | Gmail session status |
-| POST | `/api/settings/gmail/connect` | Start Gmail login (local only) |
-| POST | `/api/settings/gmail/upload-session` | Upload session JSON file |
-| DELETE | `/api/settings/gmail/disconnect` | Clear Gmail session |
+| `POST` | `/api/auth/login` | Get JWT token |
+| `GET` | `/api/campaigns` | List campaigns |
+| `POST` | `/api/campaigns` | Create campaign |
+| `POST` | `/api/campaigns/{id}/launch` | Launch campaign |
+| `POST` | `/api/campaigns/{id}/pause` | Pause |
+| `POST` | `/api/campaigns/{id}/resume` | Resume |
+| `POST` | `/api/campaigns/{id}/import-excel` | Upload `.xlsx` (`?replace=true`) |
+| `POST` | `/api/campaigns/{id}/import-gsheet` | Import Google Sheet (`?url=...&replace=true`) |
+| `GET` | `/api/campaigns/{id}/jobs` | List jobs (`?status=SCHEDULED\|SENT\|FAILED\|SKIPPED`) |
+| `POST` | `/api/email-jobs/{id}/retry` | Retry FAILED or SKIPPED job immediately |
+| `GET` | `/api/settings/gmail/status` | Session status |
+| `POST` | `/api/settings/gmail/upload-session` | Upload session file |
+| `DELETE` | `/api/settings/gmail/disconnect` | Disconnect |
 
 ---
 
-## Troubleshooting
+## 🛠 Troubleshooting
 
-### Gmail / Playwright Issues
+**All jobs SKIPPED after import**
+→ Dates in your sheet are in the past (Eastern Time). Update `Email 1`–`Email 7` to future dates and re-import with Replace. Or use **Send Now** on individual SKIPPED jobs.
 
-**Problem:** "Connect Gmail" opens a browser but the settings page shows a timeout error
-**Solution:** Click Connect Gmail again and complete login within 2 minutes.
+**Google Doc fetch fails**
+→ Ensure the Gmail session is active (Settings → Connected). The doc must be accessible by the connected Google account (owned or shared with it).
 
-**Problem:** Gmail login was completed but emails aren't sending
-**Solution:**
-- Check the Email Jobs tab — FAILED jobs show the error message
-- The Gmail session may have expired; go to Settings → Disconnect → reconnect
-- Run with `playwright.headless=false` in `application.properties` to watch what Playwright does
+**Emails not sending after Gmail connected**
+→ Check Email Jobs tab — FAILED jobs show the error. Session may have expired; go to Settings → Disconnect → reconnect or re-upload session.
 
-**Problem:** Google Doc fetch fails during import
-**Solution:**
-- Ensure the Gmail session is active (Settings shows Connected)
-- The Google Doc must be accessible by the connected Google account (owned or shared)
-- Check that the doc URL in the `Email Link` column is a standard `docs.google.com/document/d/...` URL
-- Verify the doc has at least one section starting with `Email 1:` — the parser requires this heading
+**Gmail session lost after CF restart**
+→ CF containers are ephemeral. Re-upload `gmail-session.json` via Settings after every redeploy.
 
-**Problem:** Import succeeds but email subjects/bodies are empty
-**Solution:**
-- Open the Google Doc and check the format — each section must start with `Email N:` at the **beginning of a line**
-- Ensure a `Subject:` line immediately follows each section header (or put the subject as the first line)
-- Check for extra hidden characters — copy the doc content and paste into a plain text editor to inspect
-
-**Problem:** Google Sheet import fails with "No Gmail session"
-**Solution:** Connect Gmail first in Settings. The same session that accesses Gmail also grants access to Google Sheets and Docs owned by that account.
-
-**Problem:** All jobs are SKIPPED after import
-**Solution:** The scheduled dates in your spreadsheet are in the past relative to Eastern Time. Update the `Email 1`–`Email 7` columns to future dates and re-import using **Replace with Sheet**. Alternatively, use the **Send Now** button on individual SKIPPED jobs to trigger them immediately.
-
-### Cloud Foundry / Playwright Issues
-
-**Problem:** App crashes on CF with `Host system is missing dependencies to run browsers`
-**Solution:** `PlaywrightSystemDepsInstaller` handles this automatically. Check startup logs:
-```
-PlaywrightSystemDepsInstaller: extracted N packages to /home/vcap/playwright-system-deps/sysroot
-```
-If `N = 0`, `apt-get` may be blocked by network policy — check CF egress rules.
-
-**Problem:** `JAVA_TOOL_OPTIONS: --add-opens` / `Unrecognized option` crash on CF
-**Solution:**
-```bash
-cf unset-env sh-campaign-manager JAVA_TOOL_OPTIONS
-cf restage sh-campaign-manager
-```
-
-**Problem:** Gmail session lost after `cf push` / restart
-**Solution:** The CF filesystem is ephemeral. Re-upload `gmail-session.json` via Settings → Upload Session File after every redeploy.
-
-### Build Issues
-
-**Problem:** `npm install` fails during Maven build
-**Solution:**
-```bash
-mvn clean package -DskipTests
-```
-
-**Problem:** Angular build fails with TypeScript errors
-**Solution:**
-```bash
-cd src/main/frontend
-npm install
-npm run build
-```
+**CF startup: `Host system is missing dependencies`**
+→ `PlaywrightSystemDepsInstaller` handles this automatically. Check logs for `extracted N packages`. If N=0, check CF egress/network rules.
 
 ---
 
-## Security Notes
+## 🔒 Security
 
-- App-level passwords are hashed with **BCrypt**
-- Gmail credentials are **never stored** — only the Playwright session cookie file (`gmail-session.json`)
-- JWT tokens expire after 1 hour (configurable via `app.jwt.expiration-ms`)
-- The H2 console is enabled for local debugging; it is disabled automatically on CF (`application-cloud.properties`)
-- For production, bind a MySQL/PostgreSQL service and use environment variables for the JWT secret
+- Passwords hashed with **BCrypt**
+- Gmail credentials **never stored** — only the Playwright session cookie file
+- JWT tokens expire after 1 hour
+- H2 console disabled on CF (`application-cloud.properties`)
 
 ---
 
-## License
+## 📄 License
 
-MIT License — free to use and modify.
+MIT — free to use and modify.

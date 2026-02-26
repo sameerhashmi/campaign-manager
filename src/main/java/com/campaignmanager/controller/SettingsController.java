@@ -125,6 +125,7 @@ public class SettingsController {
         dto.setConnectError(sessionService.getConnectError());
         dto.setSessionCreatedAt(sessionService.getSessionCreatedAt());
         dto.setConnectedEmail(sessionService.getConnectedEmail());
+        dto.setCloudEnvironment(systemDepsInstaller.isCloudFoundry());
 
         if (dto.isConnecting()) {
             dto.setMessage("Browser is open — please log into Gmail. Do not close the browser window.");

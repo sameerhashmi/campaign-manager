@@ -92,28 +92,43 @@ import { switchMap, takeWhile } from 'rxjs/operators';
 
           <mat-divider></mat-divider>
 
+          @if (status?.cloudEnvironment) {
+            <div class="cloud-notice">
+              <mat-icon class="cloud-notice-icon">cloud</mat-icon>
+              <span>Running in a cloud / headless environment — browser login is not available.
+                Use <strong>Upload Session File</strong> below to connect.</span>
+            </div>
+          }
+
           <mat-card-actions>
             <!-- Hidden file picker — triggered by the upload button -->
             <input #fileInput type="file" accept=".json" style="display:none"
                    (change)="onFileSelected($event)">
 
             @if (!status?.connecting) {
-              @if (!status?.connected) {
-                <button mat-raised-button color="primary" (click)="connect()">
-                  <mat-icon>open_in_new</mat-icon>
-                  Connect Gmail
-                </button>
-              } @else {
-                <button mat-raised-button color="primary" (click)="connect()">
-                  <mat-icon>refresh</mat-icon>
-                  Re-connect Gmail
-                </button>
-                <button mat-stroked-button color="warn" (click)="disconnect()" style="margin-left:8px">
+              @if (!status?.cloudEnvironment) {
+                @if (!status?.connected) {
+                  <button mat-raised-button color="primary" (click)="connect()">
+                    <mat-icon>open_in_new</mat-icon>
+                    Connect Gmail
+                  </button>
+                } @else {
+                  <button mat-raised-button color="primary" (click)="connect()">
+                    <mat-icon>refresh</mat-icon>
+                    Re-connect Gmail
+                  </button>
+                  <button mat-stroked-button color="warn" (click)="disconnect()" style="margin-left:8px">
+                    <mat-icon>link_off</mat-icon>
+                    Disconnect
+                  </button>
+                }
+              } @else if (status?.connected) {
+                <button mat-stroked-button color="warn" (click)="disconnect()">
                   <mat-icon>link_off</mat-icon>
                   Disconnect
                 </button>
               }
-              <button mat-stroked-button color="accent" (click)="fileInput.click()"
+              <button mat-stroked-button (click)="fileInput.click()"
                       [disabled]="uploading" style="margin-left:8px">
                 <mat-icon>upload_file</mat-icon>
                 {{ uploading ? 'Uploading…' : 'Upload Session File' }}
@@ -218,6 +233,12 @@ import { switchMap, takeWhile } from 'rxjs/operators';
       border-radius: 50%; width: 40px; height: 40px;
     }
     .paste-avatar mat-icon { color: white; }
+    .cloud-notice {
+      display: flex; align-items: center; gap: 10px;
+      background: #e8f0fe; border-radius: 6px;
+      padding: 10px 16px; margin: 0 16px 8px; font-size: 13px; color: #3c4043;
+    }
+    .cloud-notice-icon { color: #1a73e8; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
   `]
 })
 export class SettingsComponent implements OnInit, OnDestroy {

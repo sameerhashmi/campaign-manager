@@ -9,6 +9,7 @@ export interface GmailSessionStatus {
   sessionCreatedAt: string | null;
   message: string;
   connectedEmail?: string;
+  cloudEnvironment?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
