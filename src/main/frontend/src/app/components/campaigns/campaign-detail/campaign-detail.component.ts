@@ -73,7 +73,7 @@ import { EmailJobService } from '../../../services/email-job.service';
                   <mat-card-content>
                     <div class="detail-grid">
                       <div class="detail-row">
-                        <span class="label">Gmail Account</span>
+                        <span class="label">Email Sender</span>
                         <span>{{ campaign.gmailEmail || gmailStatus?.connectedEmail || '—' }}</span>
                       </div>
                       @if (campaign.tanzuContact) {
@@ -84,12 +84,6 @@ import { EmailJobService } from '../../../services/email-job.service';
                       @if (campaign.launchedAt) {
                         <div class="detail-row"><span class="label">Launched</span><span>{{ campaign.launchedAt | date:'medium' }}</span></div>
                       }
-                    </div>
-                    <div class="card-actions">
-                      <button mat-stroked-button [routerLink]="['/campaigns', campaign.id, 'edit']"
-                              (click)="editCampaign()">
-                        <mat-icon>edit</mat-icon> Edit
-                      </button>
                     </div>
                   </mat-card-content>
                 </mat-card>
@@ -104,40 +98,6 @@ import { EmailJobService } from '../../../services/email-job.service';
                     <mat-icon>person_add</mat-icon> Add Contacts
                   </button>
                 </div>
-
-                <!-- Google Sheets import -->
-                <mat-card class="gsheet-card">
-                  <mat-card-header>
-                    <mat-icon mat-card-avatar style="color:#1a73e8">table_view</mat-icon>
-                    <mat-card-title>Import from Google Sheet</mat-card-title>
-                    <mat-card-subtitle>Paste a Google Sheets URL to import directly — uses your connected Gmail session</mat-card-subtitle>
-                  </mat-card-header>
-                  <mat-card-content>
-                    <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
-                      <mat-label>Google Sheets URL</mat-label>
-                      <input matInput [(ngModel)]="gsheetUrl"
-                             placeholder="https://docs.google.com/spreadsheets/d/..."
-                             [disabled]="importingGSheet">
-                      <mat-icon matSuffix>link</mat-icon>
-                    </mat-form-field>
-                    <div style="display:flex;gap:8px;margin-top:4px">
-                      <button mat-stroked-button color="primary"
-                              (click)="onImportGSheet(false)"
-                              [disabled]="!gsheetUrl || importingGSheet"
-                              matTooltip="Add contacts from Google Sheet to existing list">
-                        <mat-icon>add</mat-icon>
-                        {{ importingGSheet ? 'Importing…' : 'Add from Sheet' }}
-                      </button>
-                      <button mat-stroked-button color="warn"
-                              (click)="onImportGSheet(true)"
-                              [disabled]="!gsheetUrl || importingGSheet"
-                              matTooltip="Replace ALL existing contacts with contacts from this sheet">
-                        <mat-icon>sync</mat-icon>
-                        {{ importingGSheet ? 'Importing…' : 'Replace with Sheet' }}
-                      </button>
-                    </div>
-                  </mat-card-content>
-                </mat-card>
 
                 @if (showContactPicker) {
                   <mat-card class="form-card">
@@ -338,14 +298,12 @@ import { EmailJobService } from '../../../services/email-job.service';
     .detail-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
     .detail-row { display: flex; gap: 16px; align-items: baseline; }
     .label { width: 130px; font-weight: 500; color: #5f6368; font-size: 13px; flex-shrink: 0; }
-    .card-actions { padding-top: 8px; border-top: 1px solid #f0f0f0; }
     .full-table { width: 100%; }
     .cell-sub { font-size: 12px; color: #9aa0a6; }
     .empty-state {
       text-align: center; padding: 60px; color: #9aa0a6;
       mat-icon { font-size: 48px; width: 48px; height: 48px; display: block; margin: 0 auto 12px; }
     }
-    .gsheet-card { margin: 16px 0; max-width: 700px; }
     .jobs-toolbar { margin-bottom: 12px; }
   `]
 })

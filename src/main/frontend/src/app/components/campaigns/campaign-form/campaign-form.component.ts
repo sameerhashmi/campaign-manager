@@ -37,7 +37,8 @@ import { SettingsService, GmailSessionStatus } from '../../../services/settings.
 
               <mat-form-field appearance="outline">
                 <mat-label>Campaign Name</mat-label>
-                <input matInput formControlName="name" placeholder="e.g. Q1 Tanzu Outreach">
+                <input matInput formControlName="name" placeholder="e.g. Citadel Email Campaign by SA">
+                <mat-hint>Format: &lt;Company Name&gt; Email Campaign By &lt;AE/SA&gt; — e.g. Citadel Email Campaign by SA</mat-hint>
                 @if (form.get('name')?.hasError('required')) {
                   <mat-error>Name is required</mat-error>
                 }
