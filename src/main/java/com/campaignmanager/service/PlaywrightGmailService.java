@@ -76,17 +76,43 @@ public class PlaywrightGmailService {
         // on keyboard focus.
         page.fill("input[name='subjectbox']", subject);
 
-        // ── Step 4: Fill Body ────────────────────────────────────────────────────
-        // Click the body area to focus it, then use execCommand('insertText') to
-        // insert the entire body in one JS call. This is faster and more reliable
-        // than keyboard().type() (which types character-by-character and can miss
-        // chars or lose focus on long bodies).
+        // ── Step 4: Fill Body (above Gmail signature) ───────────────────────────
+        // Click the body area to focus it, then use JS to:
+        //   1. Locate the Gmail signature element (class=gmail_signature or
+        //      data-smartmail="gmail_signature").
+        //   2. Walk up from the signature to its direct child of the body div.
+        //   3. Position the cursor right before that container using Range/Selection.
+        //   4. Call execCommand('insertText') to inject the body text above the sig,
+        //      followed by two newlines so there is a blank line between body and sig.
+        // If no signature is present the cursor is placed at the very start of the
+        // body and the text is inserted there (same as before).
         page.click("div[aria-label='Message Body']");
         page.waitForTimeout(300);
-        page.evaluate("(text) => { " +
-                "const el = document.querySelector('div[aria-label=\"Message Body\"]'); " +
-                "if (el) { el.focus(); document.execCommand('insertText', false, text); } " +
-                "}", body);
+        page.evaluate(
+            "(text) => {" +
+            "  const body = document.querySelector('div[aria-label=\"Message Body\"]');" +
+            "  if (!body) return;" +
+            "  body.focus();" +
+            "  const sig = body.querySelector('.gmail_signature, [data-smartmail=\"gmail_signature\"]');" +
+            "  const sel = window.getSelection();" +
+            "  const range = document.createRange();" +
+            "  if (sig) {" +
+            "    let sigTop = sig;" +
+            "    while (sigTop.parentElement && sigTop.parentElement !== body) sigTop = sigTop.parentElement;" +
+            "    range.setStartBefore(sigTop);" +
+            "    range.collapse(true);" +
+            "    sel.removeAllRanges();" +
+            "    sel.addRange(range);" +
+            "    document.execCommand('insertText', false, text + '\\n\\n');" +
+            "  } else {" +
+            "    range.setStart(body, 0);" +
+            "    range.collapse(true);" +
+            "    sel.removeAllRanges();" +
+            "    sel.addRange(range);" +
+            "    document.execCommand('insertText', false, text);" +
+            "  }" +
+            "}",
+            body);
 
         // ── Step 5: Send ─────────────────────────────────────────────────────────
         // Primary: click Gmail's Send button (.aoO is the compose Send button class).
