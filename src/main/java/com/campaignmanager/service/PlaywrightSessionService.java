@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class PlaywrightSessionService {
 
-    private static final String SESSION_DIR = "./data";
+    private static final String SESSION_DIR  = "./data";
     private static final String SESSION_FILE = "gmail-session.json";
 
     private final PlaywrightSystemDepsInstaller systemDepsInstaller;
@@ -50,6 +50,9 @@ public class PlaywrightSessionService {
     private Playwright playwright;
     private Browser browser;
     private BrowserContext sessionContext;
+
+    /** In-memory cache of the connected Gmail account email. Cleared on disconnect. */
+    private volatile String connectedEmail = null;
 
     // Async connect state
     private final AtomicBoolean connecting = new AtomicBoolean(false);
@@ -177,6 +180,16 @@ public class PlaywrightSessionService {
             context.storageState(new BrowserContext.StorageStateOptions().setPath(sessionPath));
             log.info("Session saved to: {}", sessionPath.toAbsolutePath());
 
+            // Cache the Gmail account email in memory from the page title
+            // Gmail title format: "Inbox - user@example.com - Gmail"
+            String detectedEmail = extractEmailFromTitle(page.title());
+            if (detectedEmail != null) {
+                connectedEmail = detectedEmail;
+                log.info("Connected Gmail email detected: {}", detectedEmail);
+            } else {
+                log.warn("Could not detect Gmail email from page title: '{}'", page.title());
+            }
+
         } finally {
             try { page.close(); }         catch (Exception ignored) {}
             try { context.close(); }      catch (Exception ignored) {}
@@ -204,14 +217,74 @@ public class PlaywrightSessionService {
         }
     }
 
-    /** Deletes the saved session file and closes any cached context. */
+    /** Deletes the saved session file and clears in-memory state. */
     public synchronized void disconnectSession() throws IOException {
         invalidateCachedContext();
+        connectedEmail = null;
         Path p = getSessionPath();
         if (Files.exists(p)) {
             Files.delete(p);
             log.info("Gmail session deleted");
         }
+    }
+
+    // ─── Connected Email ──────────────────────────────────────────────────────
+
+    /**
+     * Returns the Gmail email address of the connected account, or null if not yet detected.
+     * Populated in-memory when Connect Gmail completes or when detectEmailInBackground()
+     * is called after a session file upload. Cleared on disconnect.
+     */
+    public String getConnectedEmail() {
+        return connectedEmail;
+    }
+
+    /**
+     * After a session file is uploaded (where we don't go through the login flow),
+     * navigates to Gmail in a background thread to detect and cache the account email.
+     */
+    public void detectEmailInBackground() {
+        Thread t = new Thread(() -> {
+            try {
+                BrowserContext ctx = getSessionContext();
+                Page page = ctx.newPage();
+                try {
+                    page.navigate("https://mail.google.com/mail/u/0/");
+                    page.waitForSelector("[gh='cm'], .T-I.T-I-KE",
+                            new Page.WaitForSelectorOptions().setTimeout(20_000));
+                    String email = extractEmailFromTitle(page.title());
+                    if (email != null) {
+                        connectedEmail = email;
+                        log.info("Connected Gmail email detected: {}", email);
+                    } else {
+                        log.warn("detectEmailInBackground: could not parse email from title '{}'", page.title());
+                    }
+                } finally {
+                    try { page.close(); } catch (Exception ignored) {}
+                }
+            } catch (Exception e) {
+                log.warn("detectEmailInBackground failed: {}", e.getMessage());
+            }
+        }, "detect-gmail-email");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Parses the Gmail account email from the Gmail inbox page title.
+     * Typical formats:
+     *   "Inbox - user@example.com - Gmail"
+     *   "Inbox (5) - user@example.com - Gmail"
+     */
+    private String extractEmailFromTitle(String title) {
+        if (title == null) return null;
+        for (String part : title.split(" - ")) {
+            part = part.trim();
+            if (part.contains("@") && part.contains(".")) {
+                return part;
+            }
+        }
+        return null;
     }
 
     // ─── Send-time Context ────────────────────────────────────────────────────

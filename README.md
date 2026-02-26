@@ -6,15 +6,15 @@ A full-stack email campaign management application built with **Spring Boot 3** 
 
 ## Features
 
-- **Campaign Dashboard** — Stats cards showing campaigns, contacts, emails sent/pending/failed
-- **Campaign Management** — Create, launch, pause, and resume campaigns
+- **Campaign Dashboard** — Stats cards showing campaigns, contacts, emails sent/pending/failed with sortable, filterable tables
+- **Campaign Management** — Create, launch, pause, and resume campaigns with sender email displayed throughout
 - **Per-Contact Email Scheduling** — Each contact gets their own 7-email schedule with individual send dates read directly from the import sheet
 - **Google Doc Email Bodies** — Email content is fetched from a private Google Doc (one doc per contact) at import time using the connected Gmail session — no separate OAuth setup needed
 - **Personalization Tokens** — Use `{{name}}`, `{{title}}`, `{{role}}`, `{{company}}`, `{{play}}` in subject and body
 - **Contact Fields** — Name, Title/Role, Email, Phone, Play, Sub Play, AE/SA, Email Link (Google Doc URL), Company, Category
 - **Two Import Methods** — Upload an `.xlsx` file or paste a Google Sheets URL directly in the UI
 - **Gmail Session Login** — Log in to Gmail once via Settings; Playwright saves the session and reuses it for all sends — no stored passwords
-- **Status Tracking** — Every email job shows SCHEDULED, SENT, SKIPPED, FAILED status with retry support
+- **Status Tracking** — Every email job shows SCHEDULED, SENT, SKIPPED, FAILED status with retry/send-now support for FAILED and SKIPPED jobs
 - **Past-Date Skip** — Jobs with a scheduled date already in the past are automatically marked SKIPPED at import time
 - **Opt-Out Support** — Rows with `Opt Out = Y` in the import sheet are skipped entirely
 - **Single JAR Deployment** — Angular is bundled into the Spring Boot JAR at build time
@@ -101,7 +101,9 @@ Stats overview cards at the top:
 └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
-Below the cards: a table of all campaigns with status chips (DRAFT / ACTIVE / PAUSED).
+Below the cards: sortable, filterable tables for:
+- **Campaigns** — Name, Email Sender, Contacts, Status, Created
+- **Email Jobs (Sent / Scheduled / Failed)** — Contact, Campaign, Step, Subject, Email Sender, Time — with search filter
 
 ---
 
@@ -119,16 +121,14 @@ When you open a campaign you see three tabs:
 
 #### Tab 1 — Overview
 
-Edit campaign name, Gmail address, interval settings, and view current status. Shows last-launched timestamp.
+Edit campaign name, view sender email address (from the connected Gmail session), and manage campaign status.
 
 #### Tab 2 — Contacts
 
-Manage contacts enrolled in the campaign and import new ones.
+Import contacts using Google Sheets or add individual contacts:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  [Add from Excel]  [Replace with Excel]                          │
-│                                                                  │
 │  Import from Google Sheet                                        │
 │  ┌─────────────────────────────────────┐ [Add from Sheet]       │
 │  │ Paste Google Sheets URL here...      │ [Replace with Sheet]  │
@@ -147,7 +147,7 @@ Manage contacts enrolled in the campaign and import new ones.
 
 #### Tab 3 — Email Jobs
 
-View all scheduled/sent/failed/skipped email jobs for this campaign.
+View all scheduled/sent/failed/skipped email jobs for this campaign. FAILED and SKIPPED jobs have a **Send Now / Retry** button to immediately trigger the email.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -158,7 +158,7 @@ View all scheduled/sent/failed/skipped email jobs for this campaign.
 │ John Smith  1     Hi John, quick...   2/26/2026 9:00    SENT      2/26 9:01  │
 │ John Smith  2     Following up...     3/2/2026  9:00    SCHEDULED            │
 │ ...                                                                           │
-│ Old Contact 1     Re: Tanzu demo      1/15/2026 9:00    SKIPPED              │
+│ Old Contact 1     Re: Tanzu demo      1/15/2026 9:00    SKIPPED   [Send Now] │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -244,45 +244,42 @@ curl -X POST https://<your-app>/api/settings/gmail/upload-session \
 
 1. **Connect Gmail** in Settings (one-time setup above)
 2. Go to **Campaigns → New Campaign**
-3. Enter a campaign name and optionally your Gmail address (for reference)
-4. Click **Create Campaign**
-5. In the campaign detail, go to the **Contacts** tab
-6. Import contacts and schedule email jobs using one of:
-   - **Add from Excel** / **Replace with Excel** — upload an `.xlsx` file
+3. Enter a campaign name and click **Create Campaign**
+4. In the campaign detail, go to the **Contacts** tab
+5. Import contacts using one of:
    - **Import from Google Sheet** — paste a Google Sheets URL; the app downloads it using the connected Gmail session
-7. Click **Launch** to set the campaign to ACTIVE
-8. The scheduler checks for due jobs every 60 seconds and sends them via Gmail automation
-9. Monitor status in the **Email Jobs** tab (SCHEDULED → SENT or FAILED with retry)
+   - **Add individual contact** — select from the contact dropdown and click Add Contact
+6. Click **Launch** to set the campaign to ACTIVE
+7. The scheduler checks for due jobs every 60 seconds and sends them via Gmail automation
+8. Monitor status in the **Email Jobs** tab (SCHEDULED → SENT or FAILED/SKIPPED with retry)
 
-> **Note:** With the direct per-contact format, all email jobs are created at import time with individual scheduled dates. Launching just marks the campaign ACTIVE.
+> **Note:** All email jobs are created at import time with individual scheduled dates per contact. Launching just marks the campaign ACTIVE so the scheduler will pick up due jobs.
 
 ---
 
 ## Excel / Google Sheets Import Format
 
-### Direct Per-Contact Format (recommended)
-
-A single sheet where **each row = one contact** with their own 7-email schedule and a unique Google Doc containing the email bodies for that person.
+Each row in the spreadsheet = one contact with their own 7-email schedule and a unique Google Doc containing personalized email bodies for that person.
 
 **Auto-detected** when the sheet contains both an `Email Link` column and an `Email 1` column.
 
-#### Column headers
+### Required Column Headers
 
 | Column | Required | Description |
 |--------|----------|-------------|
 | `Name` | Yes | Contact full name |
-| `Title` | No | Job title (maps to `role` field) |
-| `Email` | Yes | Email address (used as unique key for upsert) |
+| `Title` | No | Job title (maps to `role` / `{{title}}` token) |
+| `Email` | Yes | Email address (used as unique key — duplicate rows update the existing contact) |
 | `Phone` | No | Phone number |
 | `Play` | No | Sales play (e.g. "Tanzu") |
 | `Sub Play` | No | Sub-play (e.g. "Generic") |
 | `AE/SA` | No | Role designation |
-| `Email Link` | Yes | URL of a private Google Doc containing the 7 email sections |
-| `Email 1` | Yes | Send date/time for email step 1 |
-| `Email 2`–`Email 7` | No | Send date/time for email steps 2–7 |
-| `Opt Out` | No | Set to `Y` to skip this row entirely |
+| `Email Link` | Yes | URL of the contact's private Google Doc containing the 7 email sections |
+| `Email 1` | Yes | Send date/time for email step 1 (Eastern Time) |
+| `Email 2`–`Email 7` | No | Send date/time for email steps 2–7 (leave blank to skip that step) |
+| `Opt Out` | No | Set to `Y` to skip this row entirely — no contact or jobs created |
 
-#### Date/Time Format
+### Date/Time Format
 
 All dates are interpreted as **Eastern Time (EST/EDT)** — enter times in your local time if you are in the Eastern timezone.
 
@@ -297,33 +294,87 @@ Supported date formats in the spreadsheet:
 | `yyyy-MM-dd HH:mm:ss` | `2026-02-26 14:00:00` |
 | `yyyy-MM-dd HH:mm` | `2026-02-26 14:00` |
 
-> **Important:** Jobs with a date/time already in the past at import time are automatically set to **SKIPPED**. Use future dates to get **SCHEDULED** jobs.
+> **Important:** Jobs with a date/time already in the past at import time are automatically set to **SKIPPED**. Use future dates to get **SCHEDULED** jobs. SKIPPED jobs can be manually triggered with the **Send Now** button in the Email Jobs tab.
 
-#### Example sheet rows
+### Example Sheet Rows
 
 | Name | Title | Email | Phone | Play | Sub Play | AE/SA | Email Link | Email 1 | Email 2 | Email 3 | Opt Out |
 |------|-------|-------|-------|------|----------|-------|------------|---------|---------|---------|---------|
 | Jane Doe | VP Sales | jane@acme.com | 415-555-0100 | Tanzu | Generic | AE | https://docs.google.com/document/d/... | 2/26/2026 9:00:00 | 3/2/2026 9:00:00 | 3/9/2026 9:00:00 | |
 | John Smith | Director | john@acme.com | 212-555-0200 | Aria | Starter | SA | https://docs.google.com/document/d/... | 2/26/2026 10:00:00 | 3/2/2026 10:00:00 | | Y |
 
-> John Smith has `Opt Out = Y` — this entire row is skipped, no jobs created.
+> John Smith has `Opt Out = Y` — this entire row is skipped; no contact record or email jobs are created.
 
 A sample file is available at: `examples/sample.xlsx`
 
 ---
 
-#### Google Doc Format (Email Link column)
+## Google Doc Format (Email Link Column)
 
-Each contact's Google Doc must contain numbered sections. The app fetches it at import time using the connected Gmail session (same Google account = access to private docs).
+Each contact has their own Google Doc containing up to 7 numbered email sections. The app fetches and parses the doc **at import time** using the connected Gmail session (same Google account cookies = access to private docs owned or shared with that account). Content is stored in the database — no further doc access is needed at send time.
 
-**Multi-line format (recommended):**
+### How the Parser Works
+
+The doc is exported as plain text (`/export?format=txt`). The parser reads it line by line, looking for section headers and subject/body content.
+
+---
+
+### Section Headers
+
+A new email section starts on any line where **`Email N`** appears at the very beginning of the line (N = 1–7, case-insensitive). The description after the number is ignored.
+
+```
+Email 1: Initial Outreach (Day 1)    ← starts section 1 — description ignored
+Email 2: Follow-Up (Day 4)           ← starts section 2
+Email 3                              ← also valid (no colon/description needed)
+```
+
+---
+
+### Subject Line
+
+The **first non-blank line** inside a section must be the subject:
+
+```
+Subject: Quick question about {{play}}, {{name}}
+```
+
+- The `Subject:` prefix is stripped; only the text after it is used
+- If no `Subject:` line is found, the **first line of the section becomes the subject**
+
+---
+
+### Body
+
+All lines after the subject line form the email body, preserved exactly (including blank lines for paragraph spacing).
+
+**Trailing separators are automatically stripped** — do not worry about them carrying into the next section:
+- Blank lines at the end of a section
+- Lines containing only `—`, `---`, `===`, `***`, or similar separator characters
+
+---
+
+### Inline (Single-Line) Format
+
+All 7 emails can also be written one-per-line, with the subject and body on the same line as the section header:
+
+```
+Email 1: Initial Outreach Subject: Quick question Hi Jane, I wanted to reach out...
+Email 2: Follow-Up Subject: Following up Hi Jane, Just circling back...
+```
+
+The parser detects a greeting pattern (`Hi`, `Hello`, or `Dear` followed by a capital letter) and automatically splits the subject from the body at that point.
+
+---
+
+### Complete Multi-Line Example
 
 ```
 Email 1: Initial Outreach (Day 1)
 Subject: Quick question about {{play}}, {{name}}
 Hi {{name}},
 
-I wanted to reach out because your team is using VMware Tanzu and I think
+I wanted to reach out because your team is using {{play}} and I think
 there's an opportunity to help with your current initiatives.
 
 Best,
@@ -334,30 +385,44 @@ Email 2: Follow-Up (Day 4)
 Subject: Following up, {{name}}
 Hi {{name}},
 
-Just circling back on my previous note...
+Just circling back on my previous note. Would love 15 minutes to connect.
 
 Best,
 Brian Stover
 —
 
-Email 3: ...
+Email 3: Value Add (Day 8)
+Subject: One more thought, {{name}}
+Hi {{name}},
+
+Wanted to share a quick resource that might be relevant to your {{play}} work...
+
+Best,
+Brian Stover
+—
 ```
 
-**Single-line format (also supported):**
+---
 
-```
-Email 1: Initial Outreach Subject: Quick question Hi {{name}}, I wanted to reach out...
-Email 2: Follow-Up Subject: Following up Hi {{name}}, Just circling back...
-```
+### Parsing Rules Summary
 
-**Rules:**
-- Sections start on lines matching `Email 1:` … `Email 7:` (case-insensitive, description after the number is ignored)
-- The `Subject:` line is required within each section
-- A greeting (`Hi`, `Hello`, `Dear` + name) marks the start of the body
-- Trailing `—`, `---`, or blank lines after the body are stripped
-- Sections without a corresponding date column in the sheet are skipped
+| Rule | Detail |
+|------|--------|
+| **Section start** | Line beginning with `Email N` (case-insensitive); N = 1–7 |
+| **Description ignored** | Text after the number on the header line (e.g., `: Initial Outreach (Day 1)`) is discarded |
+| **Subject** | First non-blank line of the section starting with `Subject:` (prefix stripped) |
+| **Subject fallback** | If no `Subject:` line, the first line of the section is used as the subject |
+| **Inline greeting split** | If `Hi / Hello / Dear + Capital` is found inside the subject text, the text is split — everything before the greeting becomes the subject, everything from the greeting onward becomes the body |
+| **Body** | All lines after the subject, with blank lines preserved for paragraph spacing |
+| **Trailing separator strip** | Blank lines and separator-only lines (`—`, `---`, `===`, `***`) at the end of a section are removed |
+| **Unicode normalization** | Invisible characters (BOM, zero-width spaces, non-breaking spaces) are normalized before parsing — copy-paste from Google Docs works reliably |
+| **Missing date = skip step** | If the corresponding `Email N` column in the sheet is blank, that section is not imported even if it exists in the doc |
 
-#### Supported tokens (resolved at import time)
+---
+
+### Personalization Tokens
+
+Tokens in the subject and body are resolved at import time using the contact's data from the spreadsheet:
 
 | Token | Replaced with |
 |-------|--------------|
@@ -366,28 +431,6 @@ Email 2: Follow-Up Subject: Following up Hi {{name}}, Just circling back...
 | `{{role}}` | Contact title/role |
 | `{{company}}` | Contact company |
 | `{{play}}` | Contact play field |
-
----
-
-### Legacy 2-Sheet Format
-
-Still supported for backwards compatibility. Detected automatically when the first sheet does **not** have both `Email Link` and `Email 1` columns.
-
-#### Sheet 1 — "Contacts"
-
-| name | email | role | company |
-|------|-------|------|---------|
-| John Smith | john@acme.com | VP Sales | Acme Corp |
-
-#### Sheet 2 — "Templates"
-
-| step_number | subject | body | scheduled_at |
-|-------------|---------|------|--------------|
-| 1 | Hi {{name}} | Dear {{name}}, ... | 2026-02-26 09:00 |
-| 2 | Following up | Just checking in... | 2026-03-02 14:00 |
-
-- `scheduled_at` format: `YYYY-MM-DD HH:MM`
-- All contacts share the same templates and scheduled dates
 
 ---
 
@@ -590,12 +633,19 @@ campaign-manager/
 - Ensure the Gmail session is active (Settings shows Connected)
 - The Google Doc must be accessible by the connected Google account (owned or shared)
 - Check that the doc URL in the `Email Link` column is a standard `docs.google.com/document/d/...` URL
+- Verify the doc has at least one section starting with `Email 1:` — the parser requires this heading
+
+**Problem:** Import succeeds but email subjects/bodies are empty
+**Solution:**
+- Open the Google Doc and check the format — each section must start with `Email N:` at the **beginning of a line**
+- Ensure a `Subject:` line immediately follows each section header (or put the subject as the first line)
+- Check for extra hidden characters — copy the doc content and paste into a plain text editor to inspect
 
 **Problem:** Google Sheet import fails with "No Gmail session"
 **Solution:** Connect Gmail first in Settings. The same session that accesses Gmail also grants access to Google Sheets and Docs owned by that account.
 
 **Problem:** All jobs are SKIPPED after import
-**Solution:** The scheduled dates in your spreadsheet are in the past relative to Eastern Time. Update the `Email 1`–`Email 7` columns to future dates and re-import using **Replace with Excel** or **Replace with Sheet**.
+**Solution:** The scheduled dates in your spreadsheet are in the past relative to Eastern Time. Update the `Email 1`–`Email 7` columns to future dates and re-import using **Replace with Sheet**. Alternatively, use the **Send Now** button on individual SKIPPED jobs to trigger them immediately.
 
 ### Cloud Foundry / Playwright Issues
 

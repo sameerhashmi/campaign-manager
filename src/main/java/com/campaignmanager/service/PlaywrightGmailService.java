@@ -77,21 +77,28 @@ public class PlaywrightGmailService {
         page.fill("input[name='subjectbox']", subject);
 
         // ── Step 4: Fill Body ────────────────────────────────────────────────────
-        // Click the contenteditable body area to give it focus, then type.
+        // Click the body area to focus it, then use execCommand('insertText') to
+        // insert the entire body in one JS call. This is faster and more reliable
+        // than keyboard().type() (which types character-by-character and can miss
+        // chars or lose focus on long bodies).
         page.click("div[aria-label='Message Body']");
         page.waitForTimeout(300);
-        page.keyboard().type(body);
+        page.evaluate("(text) => { " +
+                "const el = document.querySelector('div[aria-label=\"Message Body\"]'); " +
+                "if (el) { el.focus(); document.execCommand('insertText', false, text); } " +
+                "}", body);
 
         // ── Step 5: Send ─────────────────────────────────────────────────────────
         // Primary: click Gmail's Send button (.aoO is the compose Send button class).
         // This is more reliable than keyboard shortcuts because it does not depend
         // on which element currently has keyboard focus.
         // Fallback: Ctrl+Enter if the button cannot be located.
+        log.info("Clicking Send for job to={} subject='{}'", to, subject);
         boolean clickedSend = false;
         try {
             page.click(".T-I.aoO", new Page.ClickOptions().setTimeout(6_000));
             clickedSend = true;
-            log.debug("Clicked Send button (.aoO) for {}", to);
+            log.info("Clicked Send button (.aoO) for {}", to);
         } catch (Exception e) {
             log.warn("Send button (.aoO) not clickable for {} — trying Ctrl+Enter fallback", to);
         }
@@ -99,10 +106,12 @@ public class PlaywrightGmailService {
             page.keyboard().press("Control+Enter");
         }
 
+        // Give Gmail 1 second to process the send before checking the compose window
+        page.waitForTimeout(1_000);
+
         // ── Step 6: Confirm compose window closed ────────────────────────────────
         // Gmail's compose container (div.T-P) disappears when the email is accepted.
-        // If it stays open, Gmail is showing a validation error (invalid address, etc.)
-        // and the email was NOT sent — we throw so the job is marked FAILED.
+        // If it stays open, Gmail is showing a validation error.
         try {
             page.waitForSelector("div.T-P", new Page.WaitForSelectorOptions()
                     .setState(WaitForSelectorState.HIDDEN)
@@ -113,15 +122,17 @@ public class PlaywrightGmailService {
                     ". Check Gmail for a validation error (invalid recipient address?).", e);
         }
 
-        // ── Step 7: Optional snackbar confirmation ───────────────────────────────
-        // The .vh snackbar appears on a successful send but NOT on a draft save.
-        // We log a warning if absent but do NOT fail — the compose window close
-        // in Step 6 is the primary confirmation.
+        // ── Step 7: Require snackbar confirmation ────────────────────────────────
+        // The .vh snackbar ("Message sent") appears ONLY on a successful send, NOT
+        // on a draft save. Treating its absence as a failure prevents emails silently
+        // ending up in Drafts instead of being delivered.
         try {
-            page.waitForSelector(".vh", new Page.WaitForSelectorOptions().setTimeout(5_000));
-            log.debug("'Message sent' snackbar confirmed for {}", to);
+            page.waitForSelector(".vh", new Page.WaitForSelectorOptions().setTimeout(8_000));
+            log.info("'Message sent' snackbar confirmed for {}", to);
         } catch (Exception e) {
-            log.warn("Send snackbar (.vh) not detected for {} — verify email in Gmail Sent folder", to);
+            throw new RuntimeException(
+                    "Gmail did not confirm send for " + to +
+                    " — email may have been saved as Draft. Job will be retried.", e);
         }
     }
 }

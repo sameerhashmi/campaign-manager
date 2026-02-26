@@ -9,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.DateUtil;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -98,7 +98,18 @@ public class ExcelImportService {
                     "Make sure the Gmail session is active and the sheet is shared with the signed-in account.");
         }
 
-        try (InputStream is = new ByteArrayInputStream(response.body())) {
+        byte[] body = response.body();
+        // XLSX is a ZIP file — magic bytes are PK (0x50 0x4B). If Google returned HTML
+        // (e.g. a login page or permission error) the bytes won't match.
+        if (body.length < 4 || body[0] != 0x50 || body[1] != 0x4B) {
+            String preview = new String(body, 0, Math.min(body.length, 200));
+            throw new RuntimeException(
+                    "Google Sheet download did not return a valid Excel file. " +
+                    "The Gmail session may have expired — re-upload it in Settings. " +
+                    "Response preview: " + preview);
+        }
+
+        try (InputStream is = new ByteArrayInputStream(body)) {
             return importFromStream(campaignId, is, replace);
         }
     }
@@ -116,7 +127,7 @@ public class ExcelImportService {
             log.info("Replace mode: removed all existing contacts from campaign {}", campaignId);
         }
 
-        try (Workbook workbook = new XSSFWorkbook(is)) {
+        try (Workbook workbook = WorkbookFactory.create(is)) {
 
             Sheet firstSheet = workbook.getSheetAt(0);
 
@@ -124,11 +135,6 @@ public class ExcelImportService {
             if (isDirectFormat(firstSheet)) {
                 log.info("Direct per-contact format detected for campaign {}", campaignId);
                 importDirectFormat(firstSheet, campaign, result);
-                result.setMessage(String.format(
-                        "Import complete: %d contact(s) added/updated, %d email job(s) created%s.",
-                        result.getContactsImported(),
-                        result.getTemplatesImported(),
-                        result.getSkipped() > 0 ? ", " + result.getSkipped() + " opted out/skipped" : ""));
                 return result;
             }
 
@@ -228,8 +234,19 @@ public class ExcelImportService {
         log.info("Direct format columns: name={} title={} email={} emailLink={} optOut={} emailDates={}",
                 nameCol, titleCol, emailCol, emailLinkCol, optOutCol, java.util.Arrays.toString(emailDateCols));
 
+        // AE/SA email filtering: only import rows whose AE/SA column matches the
+        // connected Gmail session email. If no rows match, fail with a clear message.
+        String sessionEmail = sessionService.getConnectedEmail();
+        boolean filterByAeSa = aeRoleCol >= 0 && sessionEmail != null;
+        if (aeRoleCol >= 0 && sessionEmail == null) {
+            log.warn("AE/SA column found but connected Gmail email is unknown — skipping AE/SA filter. " +
+                     "Re-upload the Gmail session to enable sender filtering.");
+        }
+        log.info("AE/SA filter: sessionEmail={} filterEnabled={}", sessionEmail, filterByAeSa);
+
         LocalDateTime now = LocalDateTime.now();
         int rowNum = 1;
+        int aeSaFilteredOut = 0;
 
         while (rows.hasNext()) {
             Row row = rows.next();
@@ -244,6 +261,16 @@ public class ExcelImportService {
                 result.setSkipped(result.getSkipped() + 1);
                 log.debug("Row {}: opted out ({}), skipping", rowNum, email);
                 continue;
+            }
+
+            // AE/SA sender filter: skip rows whose AE/SA email doesn't match the session
+            if (filterByAeSa) {
+                String aeEmail = getCellString(row, aeRoleCol);
+                if (aeEmail == null || !sessionEmail.equalsIgnoreCase(aeEmail.trim())) {
+                    log.info("Row {}: AE/SA '{}' != session '{}' — skipping", rowNum, aeEmail, sessionEmail);
+                    aeSaFilteredOut++;
+                    continue;
+                }
             }
 
             try {
@@ -344,6 +371,26 @@ public class ExcelImportService {
                 log.warn("Failed to import row {}: {}", rowNum, e.getMessage());
             }
         }
+
+        // Post-loop AE/SA filter check: if filter was active but nothing matched, set error message
+        if (filterByAeSa && result.getContactsImported() == 0 && aeSaFilteredOut > 0) {
+            result.getErrors().add(0,
+                    "Gmail Session and Sender email address doesn't match. " +
+                    "Connected session: " + sessionEmail + ". " +
+                    "None of the " + aeSaFilteredOut + " row(s) had a matching AE/SA email address.");
+            result.setMessage("Import failed: no rows matched the connected Gmail account.");
+            return;
+        }
+
+        // Set final message (includes AE/SA skip note if applicable)
+        String filterNote = (filterByAeSa && aeSaFilteredOut > 0)
+                ? ", " + aeSaFilteredOut + " row(s) skipped (AE/SA mismatch)" : "";
+        result.setMessage(String.format(
+                "Import complete: %d contact(s) added/updated, %d email job(s) created%s%s.",
+                result.getContactsImported(),
+                result.getTemplatesImported(),
+                result.getSkipped() > 0 ? ", " + result.getSkipped() + " opted out/skipped" : "",
+                filterNote));
     }
 
     // ─── Token resolution ─────────────────────────────────────────────────────

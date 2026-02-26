@@ -42,20 +42,21 @@ public class EmailScheduler {
                 continue;
             }
 
-            // Enforce step ordering: step N only sends after step N-1 was SENT in a
-            // *previous* scheduler cycle. The 30-second cutoff prevents two consecutive
-            // steps from firing back-to-back in the same 60-second run when multiple
-            // scheduled dates are all in the past (e.g. past dates, offline catch-up).
+            // Enforce step ordering: step N only sends after step N-1 is done.
+            // "Done" means SENT (at least 30s ago, to prevent back-to-back sends in the
+            // same scheduler cycle) OR SKIPPED (past-date jobs that will never send —
+            // the next step should still proceed on its own scheduled date).
             int stepNumber = job.getStepNumber();
             if (stepNumber > 1) {
                 LocalDateTime cutoff = LocalDateTime.now().minusSeconds(30);
-                boolean previousStepSent = job.getCampaignContact().getEmailJobs().stream()
+                boolean previousStepDone = job.getCampaignContact().getEmailJobs().stream()
                         .anyMatch(j -> j.getStepNumber() == stepNumber - 1
-                                && j.getStatus() == EmailJobStatus.SENT
-                                && j.getSentAt() != null
-                                && j.getSentAt().isBefore(cutoff));
-                if (!previousStepSent) {
-                    log.info("Deferring job id={} step={} for contact={} — step {} not yet confirmed sent",
+                                && (j.getStatus() == EmailJobStatus.SKIPPED
+                                    || (j.getStatus() == EmailJobStatus.SENT
+                                        && j.getSentAt() != null
+                                        && j.getSentAt().isBefore(cutoff))));
+                if (!previousStepDone) {
+                    log.info("Deferring job id={} step={} for contact={} — step {} not yet done",
                             job.getId(), stepNumber,
                             job.getCampaignContact().getContact().getEmail(),
                             stepNumber - 1);

@@ -104,6 +104,8 @@ public class SettingsController {
             }
             sessionService.invalidateCachedContext();
             log.info("Gmail session uploaded via file upload ({} bytes)", file.getSize());
+            // Detect the Gmail account email from the uploaded session in the background
+            sessionService.detectEmailInBackground();
             GmailSessionStatusDto dto = buildStatus();
             dto.setMessage("Session file uploaded successfully. Gmail is now connected.");
             return ResponseEntity.ok(dto);
@@ -122,6 +124,7 @@ public class SettingsController {
         dto.setConnecting(sessionService.isConnecting());
         dto.setConnectError(sessionService.getConnectError());
         dto.setSessionCreatedAt(sessionService.getSessionCreatedAt());
+        dto.setConnectedEmail(sessionService.getConnectedEmail());
 
         if (dto.isConnecting()) {
             dto.setMessage("Browser is open — please log into Gmail. Do not close the browser window.");
