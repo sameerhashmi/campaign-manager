@@ -1,7 +1,11 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { MatTableModule } from '@angular/material/table';
+import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatSortModule, MatSort } from '@angular/material/sort';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCardModule } from '@angular/material/card';
@@ -19,8 +23,9 @@ import { Campaign } from '../../../models/campaign.model';
   selector: 'app-campaign-list',
   standalone: true,
   imports: [
-    CommonModule, RouterLink,
-    MatTableModule, MatButtonModule, MatIconModule, MatCardModule,
+    CommonModule, RouterLink, FormsModule,
+    MatTableModule, MatSortModule, MatFormFieldModule, MatInputModule,
+    MatButtonModule, MatIconModule, MatCardModule,
     MatChipsModule, MatProgressSpinnerModule, MatSnackBarModule,
     MatMenuModule, MatTooltipModule, NavComponent
   ],
@@ -37,11 +42,18 @@ import { Campaign } from '../../../models/campaign.model';
         @if (loading) {
           <div class="loading-center"><mat-spinner></mat-spinner></div>
         } @else {
+          <mat-form-field appearance="outline" class="filter-field">
+            <mat-label>Filter campaigns</mat-label>
+            <input matInput [(ngModel)]="filterValue" (input)="applyFilter(filterValue)"
+                   placeholder="Name, status, sender...">
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
+
           <mat-card>
             <mat-card-content style="padding:0">
-              <table mat-table [dataSource]="campaigns" class="full-table">
+              <table mat-table [dataSource]="campaignsDS" matSort #campaignsSort="matSort" class="full-table">
                 <ng-container matColumnDef="name">
-                  <th mat-header-cell *matHeaderCellDef>Campaign Name</th>
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header>Campaign Name</th>
                   <td mat-cell *matCellDef="let c">
                     <a [routerLink]="['/campaigns', c.id]" class="campaign-link">{{ c.name }}</a>
                     @if (c.description) {
@@ -51,24 +63,24 @@ import { Campaign } from '../../../models/campaign.model';
                 </ng-container>
 
                 <ng-container matColumnDef="gmailEmail">
-                  <th mat-header-cell *matHeaderCellDef>Email Sender</th>
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header>Email Sender</th>
                   <td mat-cell *matCellDef="let c">{{ c.gmailEmail || gmailStatus?.connectedEmail || '—' }}</td>
                 </ng-container>
 
                 <ng-container matColumnDef="contacts">
-                  <th mat-header-cell *matHeaderCellDef>Contacts</th>
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header>Contacts</th>
                   <td mat-cell *matCellDef="let c">{{ c.contactCount }}</td>
                 </ng-container>
 
                 <ng-container matColumnDef="status">
-                  <th mat-header-cell *matHeaderCellDef>Status</th>
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
                   <td mat-cell *matCellDef="let c">
                     <span class="status-chip {{ c.status?.toLowerCase() }}">{{ c.status }}</span>
                   </td>
                 </ng-container>
 
                 <ng-container matColumnDef="createdAt">
-                  <th mat-header-cell *matHeaderCellDef>Created</th>
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
                   <td mat-cell *matCellDef="let c">{{ c.createdAt | date:'mediumDate' }}</td>
                 </ng-container>
 
@@ -108,13 +120,15 @@ import { Campaign } from '../../../models/campaign.model';
                 <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
               </table>
 
-              @if (campaigns.length === 0) {
+              @if (campaignsDS.filteredData.length === 0) {
                 <div class="empty-state">
                   <mat-icon>campaign</mat-icon>
-                  <p>No campaigns yet. Create your first campaign!</p>
-                  <button mat-raised-button color="primary" routerLink="/campaigns/new">
-                    Create Campaign
-                  </button>
+                  <p>{{ campaignsDS.data.length === 0 ? 'No campaigns yet. Create your first campaign!' : 'No campaigns match your filter.' }}</p>
+                  @if (campaignsDS.data.length === 0) {
+                    <button mat-raised-button color="primary" routerLink="/campaigns/new">
+                      Create Campaign
+                    </button>
+                  }
                 </div>
               }
             </mat-card-content>
@@ -125,6 +139,7 @@ import { Campaign } from '../../../models/campaign.model';
   `,
   styles: [`
     .loading-center { display: flex; justify-content: center; padding: 80px; }
+    .filter-field { width: 360px; display: block; margin-bottom: 16px; }
     .full-table { width: 100%; }
     .campaign-link { color: #1a73e8; text-decoration: none; font-weight: 500; }
     .campaign-link:hover { text-decoration: underline; }
@@ -145,10 +160,24 @@ import { Campaign } from '../../../models/campaign.model';
   `]
 })
 export class CampaignListComponent implements OnInit {
-  campaigns: Campaign[] = [];
+  campaignsDS = new MatTableDataSource<Campaign>();
   gmailStatus: GmailSessionStatus | null = null;
   loading = true;
+  filterValue = '';
   displayedColumns = ['name', 'gmailEmail', 'contacts', 'status', 'createdAt', 'actions'];
+
+  @ViewChild('campaignsSort') set sortSetter(s: MatSort) {
+    if (s) {
+      this.campaignsDS.sortingDataAccessor = (item: Campaign, prop: string) => {
+        switch (prop) {
+          case 'contacts': return item.contactCount ?? 0;
+          case 'gmailEmail': return item.gmailEmail || this.gmailStatus?.connectedEmail || '';
+          default: return (item as any)[prop] ?? '';
+        }
+      };
+      this.campaignsDS.sort = s;
+    }
+  }
 
   constructor(
     private campaignService: CampaignService,
@@ -162,10 +191,22 @@ export class CampaignListComponent implements OnInit {
     this.load();
   }
 
+  applyFilter(value: string): void {
+    const f = value.trim().toLowerCase();
+    const sender = this.gmailStatus?.connectedEmail?.toLowerCase() ?? '';
+    this.campaignsDS.filterPredicate = (c: Campaign, filter: string) =>
+      c.name.toLowerCase().includes(filter) ||
+      (c.description?.toLowerCase() ?? '').includes(filter) ||
+      (c.status?.toLowerCase() ?? '').includes(filter) ||
+      (c.gmailEmail?.toLowerCase() ?? '').includes(filter) ||
+      sender.includes(filter);
+    this.campaignsDS.filter = f;
+  }
+
   load(): void {
     this.loading = true;
     this.campaignService.getAll().subscribe({
-      next: c => { this.campaigns = c; this.loading = false; },
+      next: c => { this.campaignsDS.data = c; this.loading = false; },
       error: () => this.loading = false
     });
   }

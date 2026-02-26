@@ -248,6 +248,11 @@ import { EmailJobService } from '../../../services/email-job.service';
             <!-- TAB 4: Email Jobs -->
             <mat-tab label="Email Jobs ({{ jobsDataSource.data.length }})">
               <div class="tab-content">
+                <div class="jobs-toolbar">
+                  <button mat-stroked-button (click)="refreshJobs()" matTooltip="Refresh jobs list">
+                    <mat-icon>refresh</mat-icon> Refresh
+                  </button>
+                </div>
                 <table mat-table [dataSource]="jobsDataSource" matSort class="full-table">
                   <ng-container matColumnDef="contact">
                     <th mat-header-cell *matHeaderCellDef mat-sort-header="contactName">Contact</th>
@@ -341,6 +346,7 @@ import { EmailJobService } from '../../../services/email-job.service';
       mat-icon { font-size: 48px; width: 48px; height: 48px; display: block; margin: 0 auto 12px; }
     }
     .gsheet-card { margin: 16px 0; max-width: 700px; }
+    .jobs-toolbar { margin-bottom: 12px; }
   `]
 })
 export class CampaignDetailComponent implements OnInit, AfterViewInit {
@@ -476,6 +482,13 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
         this.importingGSheet = false;
         this.snackBar.open(err?.error?.message ?? 'Google Sheet import failed', 'Close', { duration: 6000, panelClass: 'snack-error' });
       }
+    });
+  }
+
+  refreshJobs(): void {
+    this.campaignService.getJobs(this.campaignId).subscribe(j => {
+      this.jobsDataSource.data = j;
+      this.snackBar.open('Jobs refreshed', '', { duration: 2000 });
     });
   }
 

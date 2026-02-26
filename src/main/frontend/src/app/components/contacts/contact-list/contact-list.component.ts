@@ -13,7 +13,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { ContactService } from '../../../services/contact.service';
-import { Contact, CsvImportResult } from '../../../models/contact.model';
+import { Contact } from '../../../models/contact.model';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 
 @Component({
@@ -30,37 +30,10 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
       <div class="page-container">
         <div class="page-header">
           <h1>Contacts</h1>
-          <div class="header-actions">
-            <button mat-stroked-button (click)="triggerFileInput()">
-              <mat-icon>upload_file</mat-icon> Import CSV/Excel
-            </button>
-            <button mat-raised-button color="primary" (click)="openForm()">
-              <mat-icon>person_add</mat-icon> Add Contact
-            </button>
-          </div>
+          <button mat-raised-button color="primary" (click)="openForm()">
+            <mat-icon>person_add</mat-icon> Add Contact
+          </button>
         </div>
-
-        <input #fileInput type="file" accept=".csv,.xlsx,.xls" style="display:none"
-               (change)="onFileSelected($event)">
-
-        @if (importResult) {
-          <mat-card class="import-result" [class.has-errors]="importResult.failed > 0">
-            <mat-card-content>
-              <div class="import-summary">
-                <mat-icon>{{ importResult.failed === 0 ? 'check_circle' : 'warning' }}</mat-icon>
-                <span>Imported: <strong>{{ importResult.imported }}</strong> &nbsp;|&nbsp;
-                      Updated: <strong>{{ importResult.updated }}</strong> &nbsp;|&nbsp;
-                      Failed: <strong>{{ importResult.failed }}</strong></span>
-                <button mat-icon-button (click)="importResult = null"><mat-icon>close</mat-icon></button>
-              </div>
-              @if (importResult.errors.length > 0) {
-                <ul class="import-errors">
-                  @for (e of importResult.errors; track e) { <li>{{ e }}</li> }
-                </ul>
-              }
-            </mat-card-content>
-          </mat-card>
-        }
 
         <!-- Search bar -->
         <mat-form-field appearance="outline" class="search-field">
@@ -153,7 +126,7 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
               @if (contacts.length === 0) {
                 <div class="empty-state">
                   <mat-icon>people_outline</mat-icon>
-                  <p>No contacts found. Add contacts manually or import a CSV.</p>
+                  <p>No contacts found. Add a contact or import from a Google Sheet via a Campaign.</p>
                 </div>
               }
             </mat-card-content>
@@ -161,14 +134,6 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 
           <div class="contact-count">{{ contacts.length }} contact(s)</div>
         }
-
-        <!-- CSV Format Hint -->
-        <mat-card class="csv-hint">
-          <mat-card-content>
-            <strong>CSV format:</strong>
-            <code>email,name,role,company,category</code>
-          </mat-card-content>
-        </mat-card>
       </div>
     </app-nav>
   `,
@@ -185,17 +150,6 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
       mat-icon { font-size: 48px; width: 48px; height: 48px; display: block; margin: 0 auto 12px; }
     }
     .contact-count { font-size: 13px; color: #9aa0a6; margin-top: 8px; }
-    .import-result {
-      margin-bottom: 16px; border-left: 4px solid #34a853;
-      &.has-errors { border-left-color: #ea4335; }
-    }
-    .import-summary { display: flex; align-items: center; gap: 12px; }
-    .import-errors { margin: 8px 0 0 32px; color: #c62828; font-size: 13px; }
-    .csv-hint {
-      margin-top: 16px; background: #f8f9fa;
-      mat-card-content { display: flex; gap: 12px; align-items: center; font-size: 13px; }
-      code { background: #e8f0fe; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-    }
   `]
 })
 export class ContactListComponent implements OnInit {
@@ -203,7 +157,6 @@ export class ContactListComponent implements OnInit {
   loading = true;
   showForm = false;
   editingContact: Contact | null = null;
-  importResult: CsvImportResult | null = null;
 
   displayedColumns = ['name', 'email', 'role', 'company', 'category', 'actions'];
   contactForm: FormGroup;
@@ -283,19 +236,4 @@ export class ContactListComponent implements OnInit {
     });
   }
 
-  triggerFileInput(): void {
-    document.querySelector<HTMLInputElement>('input[type=file]')?.click();
-  }
-
-  onFileSelected(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    this.contactService.importCsv(file).subscribe({
-      next: result => {
-        this.importResult = result;
-        this.load();
-      },
-      error: () => this.snackBar.open('Import failed', 'Close', { duration: 4000, panelClass: 'snack-error' })
-    });
-  }
 }
