@@ -11,16 +11,17 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSelectModule } from '@angular/material/select';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService, ExcelImportResult } from '../../../services/campaign.service';
-import { SettingsService, GmailSessionStatus } from '../../../services/settings.service';
+import { SettingsService, GmailSessionStatus, ConnectedSession } from '../../../services/settings.service';
 
 @Component({
   selector: 'app-campaign-form',
   standalone: true,
   imports: [
     CommonModule, ReactiveFormsModule, FormsModule, RouterLink,
-    MatCardModule, MatFormFieldModule, MatInputModule,
+    MatCardModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatIconModule, MatSnackBarModule, MatProgressSpinnerModule,
     MatDividerModule, MatTooltipModule, NavComponent
   ],
@@ -55,19 +56,25 @@ import { SettingsService, GmailSessionStatus } from '../../../services/settings.
                 <mat-hint>Internal VMware/Tanzu contact associated with this campaign</mat-hint>
               </mat-form-field>
 
-              <div class="session-notice">
-                <mat-icon class="notice-icon">info</mat-icon>
-                <div>
-                  @if (gmailStatus?.connectedEmail) {
-                    Emails will be sent from <strong>{{ gmailStatus!.connectedEmail }}</strong>
-                    (Gmail session configured in <a routerLink="/settings">Settings</a>).
-                  } @else {
-                    Emails are sent using the Gmail session configured in
-                    <a routerLink="/settings">Settings</a>.
-                    No credentials needed here.
-                  }
+              @if (connectedSessions.length > 0) {
+                <mat-form-field appearance="outline">
+                  <mat-label>Send From (Gmail Account)</mat-label>
+                  <mat-select formControlName="gmailEmail">
+                    @for (s of connectedSessions; track s.email) {
+                      <mat-option [value]="s.email">{{ s.email }}</mat-option>
+                    }
+                  </mat-select>
+                  <mat-hint>Emails for this campaign will be sent from this Gmail account</mat-hint>
+                </mat-form-field>
+              } @else {
+                <div class="session-notice">
+                  <mat-icon class="notice-icon">warning_amber</mat-icon>
+                  <div>
+                    No Gmail sessions connected.
+                    <a routerLink="/settings">Go to Settings</a> to add a Gmail account first.
+                  </div>
                 </div>
-              </div>
+              }
 
               <mat-divider style="margin: 8px 0"></mat-divider>
 
@@ -313,6 +320,7 @@ export class CampaignFormComponent implements OnInit {
   gsheetUrl = '';
   importResult: ExcelImportResult | null = null;
   gmailStatus: GmailSessionStatus | null = null;
+  connectedSessions: ConnectedSession[] = [];
 
   // Token display strings (avoids Angular treating {{...}} as interpolation bindings)
   readonly tokenName = '{{name}}';
@@ -342,6 +350,16 @@ export class CampaignFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
+    this.settingsService.getSessions().subscribe({
+      next: sessions => {
+        this.connectedSessions = sessions;
+        const id = this.route.snapshot.paramMap.get('id');
+        if ((!id || id === 'new') && sessions.length > 0 && !this.form.get('gmailEmail')?.value) {
+          this.form.patchValue({ gmailEmail: sessions[0].email });
+        }
+      },
+      error: () => {}
+    });
     const id = this.route.snapshot.paramMap.get('id');
     if (id && id !== 'new') {
       this.editId = +id;

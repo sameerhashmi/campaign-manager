@@ -2,6 +2,12 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+export interface ConnectedSession {
+  email: string;
+  connectedAt: string | null;
+  campaignCount: number;
+}
+
 export interface GmailSessionStatus {
   connected: boolean;
   connecting: boolean;
@@ -10,6 +16,7 @@ export interface GmailSessionStatus {
   message: string;
   connectedEmail?: string;
   cloudEnvironment?: boolean;
+  sessions?: ConnectedSession[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -22,12 +29,16 @@ export class SettingsService {
     return this.http.get<GmailSessionStatus>(`${this.base}/gmail/status`);
   }
 
+  getSessions(): Observable<ConnectedSession[]> {
+    return this.http.get<ConnectedSession[]>(`${this.base}/gmail/sessions`);
+  }
+
   /** Triggers async browser open — returns immediately (202). Frontend polls status. */
   connectGmail(): Observable<GmailSessionStatus> {
     return this.http.post<GmailSessionStatus>(`${this.base}/gmail/connect`, null);
   }
 
-  /** Uploads a gmail-session.json file exported from a local machine. */
+  /** Uploads a gmail-session.json file; backend detects email and saves per-account. */
   uploadSession(file: File): Observable<GmailSessionStatus> {
     const fd = new FormData();
     fd.append('file', file, file.name);
@@ -39,6 +50,13 @@ export class SettingsService {
     return this.http.post<GmailSessionStatus>(`${this.base}/gmail/import-cookies`, { cookieJson: json });
   }
 
+  /** Disconnects a specific Gmail account by email. */
+  disconnectSession(email: string): Observable<GmailSessionStatus> {
+    return this.http.delete<GmailSessionStatus>(
+      `${this.base}/gmail/sessions/${encodeURIComponent(email)}`);
+  }
+
+  /** Disconnects all sessions (legacy endpoint). */
   disconnectGmail(): Observable<GmailSessionStatus> {
     return this.http.delete<GmailSessionStatus>(`${this.base}/gmail/disconnect`);
   }

@@ -25,33 +25,45 @@ public class PlaywrightGmailService {
      * Throws an exception if sending fails.
      */
     public void send(EmailJob job) throws Exception {
-        String toEmail = job.getCampaignContact().getContact().getEmail();
+        String toEmail     = job.getCampaignContact().getContact().getEmail();
+        String senderEmail = job.getCampaignContact().getCampaign().getGmailEmail();
 
-        BrowserContext context = sessionService.getSessionContext();
+        // Route to the campaign-specific session; fall back to first available
+        BrowserContext context = (senderEmail != null && !senderEmail.isBlank())
+                ? sessionService.getSessionContext(senderEmail)
+                : sessionService.getSessionContext();
+
         Page page = context.newPage();
 
         try {
-            // Navigate to Gmail — page.navigate already waits for the load event.
-            // NETWORKIDLE is never reached because Gmail holds persistent WebSocket connections,
-            // so we rely on waitForSelector for the compose button instead.
             page.navigate("https://mail.google.com/mail/u/0/");
 
-            // If session expired and we're redirected to login, invalidate and fail
+            // If session expired and redirected to login, invalidate only that account's context
             if (page.url().contains("accounts.google.com")) {
-                sessionService.invalidateCachedContext();
+                invalidateContext(senderEmail);
                 throw new Exception(
-                        "Gmail session has expired. Go to Settings → Connect Gmail to re-establish the session.");
+                        "Gmail session has expired for " +
+                        (senderEmail != null ? senderEmail : "the connected account") +
+                        ". Go to Settings → Gmail Sessions and upload a new session.");
             }
 
             composeAndSend(page, toEmail, job.getSubject(), job.getBody());
-            log.info("Email sent via Gmail to {} (job id: {})", toEmail, job.getId());
+            log.info("Email sent via Gmail to {} from {} (job id: {})",
+                    toEmail, senderEmail != null ? senderEmail : "default", job.getId());
 
         } catch (Exception e) {
-            // Invalidate context so next attempt gets a fresh one
-            sessionService.invalidateCachedContext();
+            invalidateContext(senderEmail);
             throw new Exception("Playwright Gmail send failed: " + e.getMessage(), e);
         } finally {
             try { page.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private void invalidateContext(String senderEmail) {
+        if (senderEmail != null && !senderEmail.isBlank()) {
+            sessionService.invalidateCachedContext(senderEmail);
+        } else {
+            sessionService.invalidateCachedContext();
         }
     }
 

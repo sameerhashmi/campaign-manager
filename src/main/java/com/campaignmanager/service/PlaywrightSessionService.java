@@ -14,24 +14,30 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
- * Manages a persistent Gmail browser session using Playwright's storageState.
+ * Manages persistent Gmail browser sessions using Playwright's storageState.
  *
- * The user logs in once via a visible browser window (Settings page → Connect Gmail).
- * Playwright saves the session cookies/localStorage to disk. Subsequent email sends
- * reuse the saved session — no credentials are ever stored in the campaign.
+ * Supports multiple sessions — one per Gmail account — stored under
+ * {@code ./data/sessions/{email}.json}.  Campaigns reference a session by the
+ * {@code gmailEmail} column; the scheduler looks up the matching context before
+ * sending.  If a campaign has no Gmail email assigned it falls back to the first
+ * available session (backward-compatible with single-session deployments).
  *
- * The connect flow is ASYNCHRONOUS: the browser opens in a background thread,
- * and the frontend polls GET /api/settings/gmail/status to detect completion.
+ * On startup the service automatically migrates the legacy single-session file
+ * {@code ./data/gmail-session.json} to the new per-email layout.
  */
 @Service
 @DependsOn("playwrightSystemDepsInstaller")
@@ -39,8 +45,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class PlaywrightSessionService {
 
-    private static final String SESSION_DIR  = "./data";
-    private static final String SESSION_FILE = "gmail-session.json";
+    private static final String SESSIONS_DIR   = "./data/sessions";
+    private static final String LEGACY_SESSION = "./data/gmail-session.json";
 
     private final PlaywrightSystemDepsInstaller systemDepsInstaller;
 
@@ -49,20 +55,19 @@ public class PlaywrightSessionService {
 
     private Playwright playwright;
     private Browser browser;
-    private BrowserContext sessionContext;
 
-    /** In-memory cache of the connected Gmail account email. Cleared on disconnect. */
-    private volatile String connectedEmail = null;
+    /** BrowserContext pool — one per Gmail account email. */
+    private final Map<String, BrowserContext> sessionContexts = new ConcurrentHashMap<>();
+
+    /** Email address of the most recently connected/uploaded account. */
+    private volatile String lastConnectedEmail = null;
 
     // Async connect state
     private final AtomicBoolean connecting = new AtomicBoolean(false);
     private final AtomicReference<String> connectError = new AtomicReference<>(null);
 
-    /**
-     * Creates a Playwright instance with LD_LIBRARY_PATH injected via CreateOptions.setEnv()
-     * when running on CF (so the Node.js driver and Chromium pick up the extracted system libs).
-     * On local dev, systemDepsInstaller.getLibraryPath() returns null and we use plain create().
-     */
+    // ─── Playwright Factory ───────────────────────────────────────────────────
+
     private Playwright createPlaywright() {
         String libPath = systemDepsInstaller.getLibraryPath();
         if (libPath != null) {
@@ -74,10 +79,6 @@ public class PlaywrightSessionService {
         return Playwright.create();
     }
 
-    /**
-     * Returns Chromium launch options.  On CF, adds --no-sandbox because CF containers
-     * do not expose kernel user namespaces required by Chrome's process sandbox.
-     */
     private BrowserType.LaunchOptions launchOptions(boolean headless) {
         BrowserType.LaunchOptions opts = new BrowserType.LaunchOptions().setHeadless(headless);
         if (systemDepsInstaller.isCloudFoundry()) {
@@ -86,33 +87,94 @@ public class PlaywrightSessionService {
         return opts;
     }
 
-    /** Pre-warms Playwright at startup so browser binaries are ready before any HTTP request. */
+    // ─── Init / Migration ─────────────────────────────────────────────────────
+
     @PostConstruct
     public synchronized void initialize() {
         log.info("Playwright: initializing and verifying browser binaries...");
         try {
-            if (playwright == null) {
-                playwright = createPlaywright();
-            }
+            if (playwright == null) playwright = createPlaywright();
             log.info("Playwright: browser binaries ready.");
         } catch (Exception e) {
             log.warn("Playwright: initialization warning: {}", e.getMessage());
+        }
+
+        // Migrate legacy single-session file to per-email layout
+        Path legacy = Paths.get(LEGACY_SESSION);
+        if (Files.exists(legacy)) {
+            log.info("Migrating legacy gmail-session.json to per-email layout...");
+            try {
+                Files.createDirectories(Paths.get(SESSIONS_DIR));
+                String email = detectEmailSync(legacy);
+                if (email != null) {
+                    Path dest = getSessionPath(email);
+                    Files.move(legacy, dest, StandardCopyOption.REPLACE_EXISTING);
+                    lastConnectedEmail = email;
+                    log.info("Migrated legacy session → sessions/{}.json", email);
+                } else {
+                    log.warn("Could not detect Gmail email from legacy session; leaving file in place.");
+                }
+            } catch (Exception e) {
+                log.warn("Legacy session migration failed: {}", e.getMessage());
+            }
+        }
+    }
+
+    // ─── Session Paths & Discovery ────────────────────────────────────────────
+
+    /** Path for a specific Gmail account's session file. */
+    public Path getSessionPath(String email) {
+        return Paths.get(SESSIONS_DIR, email + ".json");
+    }
+
+    /** Returns true if a session file exists for the given email. */
+    public boolean isSessionActive(String email) {
+        return Files.exists(getSessionPath(email));
+    }
+
+    /** Returns true if ANY session file exists. */
+    public boolean hasAnySession() {
+        return !listConnectedEmails().isEmpty();
+    }
+
+    /** Scans the sessions directory and returns all connected email addresses. */
+    public List<String> listConnectedEmails() {
+        Path dir = Paths.get(SESSIONS_DIR);
+        if (!Files.exists(dir)) return List.of();
+        try (var stream = Files.list(dir)) {
+            return stream
+                    .filter(p -> p.toString().endsWith(".json")
+                              && !p.getFileName().toString().startsWith("upload-")
+                              && !p.getFileName().toString().startsWith("connecting-"))
+                    .map(p -> p.getFileName().toString().replace(".json", ""))
+                    .sorted()
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            log.warn("listConnectedEmails failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** Returns the file modification time for the given account's session. */
+    public LocalDateTime getSessionCreatedAt(String email) {
+        Path p = getSessionPath(email);
+        if (!Files.exists(p)) return null;
+        try {
+            Instant modified = Files.getLastModifiedTime(p).toInstant();
+            return LocalDateTime.ofInstant(modified, ZoneId.systemDefault());
+        } catch (IOException e) {
+            return null;
         }
     }
 
     // ─── Async Connect ────────────────────────────────────────────────────────
 
-    /** @return true while a connect-browser session is in progress */
     public boolean isConnecting() { return connecting.get(); }
-
-    /** @return error message from the most recent failed connect attempt, or null */
     public String getConnectError() { return connectError.get(); }
 
     /**
-     * Starts the Gmail session setup asynchronously.
-     * Opens a visible browser window in a background thread; the frontend polls
-     * {@code GET /api/settings/gmail/status} to detect when login completes.
-     * Safe to call multiple times — ignored if a connect is already in progress.
+     * Starts an async Gmail login (visible browser window).
+     * The frontend polls GET /status to detect completion.
      */
     public void startConnectSession() {
         if (connecting.compareAndSet(false, true)) {
@@ -132,21 +194,17 @@ public class PlaywrightSessionService {
         }
     }
 
-    /** Actual blocking connect logic, runs in the background thread. */
     private void doConnectSession() throws Exception {
         log.info("Starting Gmail session setup — opening browser for user login");
-        Files.createDirectories(Paths.get(SESSION_DIR));
+        Files.createDirectories(Paths.get(SESSIONS_DIR));
 
         synchronized (this) {
             if (playwright == null) playwright = createPlaywright();
         }
 
         Browser connectBrowser = playwright.chromium().launch(launchOptions(false));
-
         BrowserContext context = connectBrowser.newContext(
-                new Browser.NewContextOptions().setViewportSize(1280, 900)
-        );
-
+                new Browser.NewContextOptions().setViewportSize(1280, 900));
         Page page = context.newPage();
         page.setDefaultTimeout(120_000);
 
@@ -157,117 +215,150 @@ public class PlaywrightSessionService {
             try {
                 page.waitForURL(
                         url -> url.contains("mail.google.com") && !url.contains("accounts.google.com"),
-                        new Page.WaitForURLOptions().setTimeout(120_000)
-                );
+                        new Page.WaitForURLOptions().setTimeout(120_000));
             } catch (Exception e) {
                 String msg = e.getMessage() != null && e.getMessage().contains("closed")
-                        ? "Browser window was closed before login completed. Click 'Connect Gmail' and complete login without closing the browser."
-                        : "Login timed out (2 minutes). Click 'Connect Gmail' again and log in promptly.";
+                        ? "Browser window was closed before login completed."
+                        : "Login timed out (2 minutes). Click 'Connect Gmail' again.";
                 throw new Exception(msg);
             }
 
-            // Wait for the basic page load; Gmail keeps making background requests
-            // so NETWORKIDLE never fires — LOAD is sufficient to confirm the inbox is ready.
             try {
                 page.waitForLoadState(LoadState.LOAD,
                         new Page.WaitForLoadStateOptions().setTimeout(15_000));
-            } catch (Exception ignored) {
-                // If even LOAD times out, the URL check already confirmed login — proceed.
-            }
+            } catch (Exception ignored) {}
 
             log.info("Gmail login detected — saving session state");
-            Path sessionPath = getSessionPath();
-            context.storageState(new BrowserContext.StorageStateOptions().setPath(sessionPath));
-            log.info("Session saved to: {}", sessionPath.toAbsolutePath());
 
-            // Cache the Gmail account email in memory from the page title
-            // Gmail title format: "Inbox - user@example.com - Gmail"
+            // Save to temp file, then rename to {email}.json
+            Path tempPath = Paths.get(SESSIONS_DIR, "connecting-temp.json");
+            context.storageState(new BrowserContext.StorageStateOptions().setPath(tempPath));
+
             String detectedEmail = extractEmailFromTitle(page.title());
             if (detectedEmail != null) {
-                connectedEmail = detectedEmail;
-                log.info("Connected Gmail email detected: {}", detectedEmail);
+                Path finalPath = getSessionPath(detectedEmail);
+                Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
+                lastConnectedEmail = detectedEmail;
+                log.info("Session saved → sessions/{}.json", detectedEmail);
             } else {
-                log.warn("Could not detect Gmail email from page title: '{}'", page.title());
+                // Fallback if title parsing fails
+                Path fallback = Paths.get(SESSIONS_DIR, "unknown.json");
+                Files.move(tempPath, fallback, StandardCopyOption.REPLACE_EXISTING);
+                lastConnectedEmail = "unknown";
+                log.warn("Could not detect email from page title; saved as unknown.json");
             }
 
         } finally {
             try { page.close(); }         catch (Exception ignored) {}
             try { context.close(); }      catch (Exception ignored) {}
             try { connectBrowser.close(); } catch (Exception ignored) {}
-            invalidateCachedContext();
+            // Don't invalidate ALL contexts — only this temp connect browser is closing
         }
     }
 
-    // ─── Session Status ───────────────────────────────────────────────────────
+    // ─── BrowserContext Pool ──────────────────────────────────────────────────
 
-    /** Returns true if a saved session file exists on disk. */
-    public boolean isSessionActive() {
-        return Files.exists(getSessionPath());
+    /**
+     * Returns (or creates) a cached BrowserContext for the given Gmail account.
+     * Throws if no session file exists for that email.
+     */
+    public synchronized BrowserContext getSessionContext(String email) {
+        if (!isSessionActive(email)) {
+            throw new IllegalStateException(
+                    "No Gmail session for " + email +
+                    ". Upload a session file in Settings → Gmail Sessions.");
+        }
+        if (playwright == null) playwright = createPlaywright();
+        if (browser == null || !browser.isConnected()) {
+            browser = playwright.chromium().launch(launchOptions(headless));
+            sessionContexts.clear();
+        }
+        return sessionContexts.computeIfAbsent(email, e ->
+                browser.newContext(new Browser.NewContextOptions()
+                        .setStorageStatePath(getSessionPath(e))
+                        .setViewportSize(1280, 900)));
     }
 
-    /** Returns the modification time of the saved session, or null. */
-    public LocalDateTime getSessionCreatedAt() {
-        Path p = getSessionPath();
-        if (!Files.exists(p)) return null;
-        try {
-            Instant modified = Files.getLastModifiedTime(p).toInstant();
-            return LocalDateTime.ofInstant(modified, ZoneId.systemDefault());
-        } catch (IOException e) {
-            return null;
+    /**
+     * Backward-compatible no-arg version — returns context for the first
+     * available session. Used by campaigns with no gmailEmail assigned.
+     */
+    public synchronized BrowserContext getSessionContext() {
+        List<String> emails = listConnectedEmails();
+        if (emails.isEmpty()) {
+            throw new IllegalStateException(
+                    "No Gmail session found. Go to Settings → Connect Gmail first.");
+        }
+        return getSessionContext(emails.get(0));
+    }
+
+    /** Invalidates the cached context for one email (on send failure / expiry). */
+    public synchronized void invalidateCachedContext(String email) {
+        BrowserContext ctx = sessionContexts.remove(email);
+        if (ctx != null) {
+            try { ctx.close(); } catch (Exception ignored) {}
+            log.info("Invalidated cached context for {}", email);
         }
     }
 
-    /** Deletes the saved session file and clears in-memory state. */
-    public synchronized void disconnectSession() throws IOException {
-        invalidateCachedContext();
-        connectedEmail = null;
-        Path p = getSessionPath();
+    /** Invalidates ALL cached contexts (e.g. on browser restart). */
+    public synchronized void invalidateCachedContext() {
+        sessionContexts.forEach((email, ctx) -> {
+            try { ctx.close(); } catch (Exception ignored) {}
+        });
+        sessionContexts.clear();
+    }
+
+    // ─── Disconnect ───────────────────────────────────────────────────────────
+
+    /** Removes the session file and context for a specific Gmail account. */
+    public synchronized void disconnectSession(String email) throws IOException {
+        invalidateCachedContext(email);
+        Path p = getSessionPath(email);
         if (Files.exists(p)) {
             Files.delete(p);
-            log.info("Gmail session deleted");
+            log.info("Gmail session deleted for {}", email);
         }
+        if (email.equals(lastConnectedEmail)) lastConnectedEmail = null;
     }
 
-    // ─── Connected Email ──────────────────────────────────────────────────────
+    // ─── Email Detection ──────────────────────────────────────────────────────
 
     /**
-     * Returns the Gmail email address of the connected account, or null if not yet detected.
-     * Populated in-memory when Connect Gmail completes or when detectEmailInBackground()
-     * is called after a session file upload. Cleared on disconnect.
+     * Opens a temporary browser context from the given session file,
+     * navigates to Gmail, and extracts the account email from the page title.
+     * Returns null if detection fails or times out.
+     * Used synchronously during upload/import to name the session file correctly.
      */
-    public String getConnectedEmail() {
-        return connectedEmail;
-    }
-
-    /**
-     * After a session file is uploaded (where we don't go through the login flow),
-     * navigates to Gmail in a background thread to detect and cache the account email.
-     */
-    public void detectEmailInBackground() {
-        Thread t = new Thread(() -> {
-            try {
-                BrowserContext ctx = getSessionContext();
-                Page page = ctx.newPage();
-                try {
-                    page.navigate("https://mail.google.com/mail/u/0/");
-                    page.waitForSelector("[gh='cm'], .T-I.T-I-KE",
-                            new Page.WaitForSelectorOptions().setTimeout(20_000));
-                    String email = extractEmailFromTitle(page.title());
-                    if (email != null) {
-                        connectedEmail = email;
-                        log.info("Connected Gmail email detected: {}", email);
-                    } else {
-                        log.warn("detectEmailInBackground: could not parse email from title '{}'", page.title());
-                    }
-                } finally {
-                    try { page.close(); } catch (Exception ignored) {}
+    public String detectEmailSync(Path sessionPath) {
+        try {
+            synchronized (this) {
+                if (playwright == null) playwright = createPlaywright();
+                if (browser == null || !browser.isConnected()) {
+                    browser = playwright.chromium().launch(launchOptions(headless));
                 }
-            } catch (Exception e) {
-                log.warn("detectEmailInBackground failed: {}", e.getMessage());
             }
-        }, "detect-gmail-email");
-        t.setDaemon(true);
-        t.start();
+            BrowserContext tempCtx = browser.newContext(
+                    new Browser.NewContextOptions()
+                            .setStorageStatePath(sessionPath)
+                            .setViewportSize(1280, 900));
+            Page page = tempCtx.newPage();
+            try {
+                page.navigate("https://mail.google.com/mail/u/0/");
+                page.waitForSelector("[gh='cm'], .T-I.T-I-KE",
+                        new Page.WaitForSelectorOptions().setTimeout(20_000));
+                String email = extractEmailFromTitle(page.title());
+                if (email != null) log.info("detectEmailSync: detected {}", email);
+                else log.warn("detectEmailSync: could not parse email from title '{}'", page.title());
+                return email;
+            } finally {
+                try { page.close(); }    catch (Exception ignored) {}
+                try { tempCtx.close(); } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            log.warn("detectEmailSync failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -287,48 +378,27 @@ public class PlaywrightSessionService {
         return null;
     }
 
-    // ─── Send-time Context ────────────────────────────────────────────────────
+    // ─── Backward-Compat Accessors ────────────────────────────────────────────
 
     /**
-     * Returns a BrowserContext loaded with the saved session for sending emails.
-     * The context is cached and reused across sends.
-     *
-     * @throws IllegalStateException if no session has been established
+     * Returns the most recently connected email, or the first available.
+     * Used by SettingsController.buildStatus() for backward compat.
      */
-    public synchronized BrowserContext getSessionContext() {
-        if (!isSessionActive()) {
-            throw new IllegalStateException(
-                    "No Gmail session found. Go to Settings → Connect Gmail first.");
+    public String getConnectedEmail() {
+        if (lastConnectedEmail != null && isSessionActive(lastConnectedEmail)) {
+            return lastConnectedEmail;
         }
-
-        if (playwright == null) playwright = createPlaywright();
-
-        if (browser == null || !browser.isConnected()) {
-            browser = playwright.chromium().launch(launchOptions(headless));
-            invalidateCachedContext();
-        }
-        if (sessionContext == null) {
-            sessionContext = browser.newContext(
-                    new Browser.NewContextOptions()
-                            .setStorageStatePath(getSessionPath())
-                            .setViewportSize(1280, 900)
-            );
-            log.info("Loaded Gmail session context from {}", getSessionPath().toAbsolutePath());
-        }
-        return sessionContext;
+        List<String> emails = listConnectedEmails();
+        return emails.isEmpty() ? null : emails.get(0);
     }
 
-    /** Closes the cached BrowserContext so it will be recreated on the next send. */
-    public synchronized void invalidateCachedContext() {
-        if (sessionContext != null) {
-            try { sessionContext.close(); } catch (Exception ignored) {}
-            sessionContext = null;
-        }
+    /** @deprecated Use getSessionCreatedAt(String email) */
+    public LocalDateTime getSessionCreatedAt() {
+        String email = getConnectedEmail();
+        return email != null ? getSessionCreatedAt(email) : null;
     }
 
-    public Path getSessionPath() {
-        return Paths.get(SESSION_DIR, SESSION_FILE);
-    }
+    // ─── Cleanup ──────────────────────────────────────────────────────────────
 
     @PreDestroy
     public void cleanup() {

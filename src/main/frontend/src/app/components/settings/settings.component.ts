@@ -9,8 +9,10 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatTableModule } from '@angular/material/table';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../shared/nav/nav.component';
-import { SettingsService, GmailSessionStatus } from '../../services/settings.service';
+import { SettingsService, GmailSessionStatus, ConnectedSession } from '../../services/settings.service';
 import { interval, Subscription } from 'rxjs';
 import { switchMap, takeWhile } from 'rxjs/operators';
 
@@ -21,7 +23,7 @@ import { switchMap, takeWhile } from 'rxjs/operators';
     CommonModule, FormsModule,
     MatCardModule, MatButtonModule, MatIconModule,
     MatProgressSpinnerModule, MatSnackBarModule, MatDividerModule,
-    MatInputModule, MatFormFieldModule,
+    MatInputModule, MatFormFieldModule, MatTableModule, MatTooltipModule,
     NavComponent
   ],
   template: `
@@ -31,16 +33,16 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           <h1>Settings</h1>
         </div>
 
-        <!-- Gmail Session Card -->
+        <!-- Gmail Sessions Card -->
         <mat-card class="settings-card">
           <mat-card-header>
             <div mat-card-avatar class="gmail-avatar">
               <mat-icon>mail</mat-icon>
             </div>
-            <mat-card-title>Gmail Session</mat-card-title>
+            <mat-card-title>Gmail Sessions</mat-card-title>
             <mat-card-subtitle>
-              Log in to Gmail once — Playwright reuses the session to send all campaign emails.
-              No passwords are stored in the app.
+              Each Gmail account is stored as a separate session.
+              Campaigns send from the account assigned to them.
             </mat-card-subtitle>
           </mat-card-header>
 
@@ -48,84 +50,88 @@ import { switchMap, takeWhile } from 'rxjs/operators';
             @if (loading) {
               <div class="status-row">
                 <mat-spinner diameter="24"></mat-spinner>
-                <span class="status-text">Checking session status...</span>
+                <span class="status-text">Checking sessions...</span>
               </div>
-            } @else if (status) {
-
-              @if (status.connecting) {
-                <div class="connecting-banner">
-                  <mat-spinner diameter="28"></mat-spinner>
-                  <div>
-                    <div class="connecting-title">Browser window is open</div>
-                    <div class="connecting-sub">
-                      Log into Gmail in the Chrome window that just appeared on your screen.
-                      <strong>Do not close it.</strong> This page updates automatically when done.
-                    </div>
+            } @else if (status?.connecting) {
+              <div class="connecting-banner">
+                <mat-spinner diameter="28"></mat-spinner>
+                <div>
+                  <div class="connecting-title">Browser window is open</div>
+                  <div class="connecting-sub">
+                    Log into Gmail in the Chrome window that just appeared on your screen.
+                    <strong>Do not close it.</strong> This page updates automatically when done.
                   </div>
                 </div>
+              </div>
+            } @else {
+              <!-- Sessions table -->
+              @if (sessions.length > 0) {
+                <table mat-table [dataSource]="sessions" class="sessions-table">
+                  <ng-container matColumnDef="email">
+                    <th mat-header-cell *matHeaderCellDef>Gmail Account</th>
+                    <td mat-cell *matCellDef="let s">
+                      <div class="session-email">
+                        <mat-icon class="email-icon">check_circle</mat-icon>
+                        <div>
+                          <div class="email-addr">{{ s.email }}</div>
+                          @if (s.connectedAt) {
+                            <div class="email-sub">Connected {{ s.connectedAt | date:'mediumDate' }}</div>
+                          }
+                        </div>
+                      </div>
+                    </td>
+                  </ng-container>
+                  <ng-container matColumnDef="campaigns">
+                    <th mat-header-cell *matHeaderCellDef>Campaigns</th>
+                    <td mat-cell *matCellDef="let s">{{ s.campaignCount }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="actions">
+                    <th mat-header-cell *matHeaderCellDef></th>
+                    <td mat-cell *matCellDef="let s">
+                      <button mat-stroked-button color="warn" (click)="disconnectOne(s.email)"
+                              matTooltip="Remove this Gmail session">
+                        <mat-icon>link_off</mat-icon> Disconnect
+                      </button>
+                    </td>
+                  </ng-container>
+                  <tr mat-header-row *matHeaderRowDef="['email','campaigns','actions']"></tr>
+                  <tr mat-row *matRowDef="let row; columns: ['email','campaigns','actions'];"></tr>
+                </table>
               } @else {
-                <div class="status-row">
-                  <mat-icon [class]="status.connected ? 'icon-connected' : 'icon-disconnected'">
-                    {{ status.connected ? 'check_circle' : 'cancel' }}
-                  </mat-icon>
-                  <div>
-                    <div class="status-label">
-                      {{ status.connected ? 'Connected' : 'Not connected' }}
-                    </div>
-                    @if (status.connected && status.sessionCreatedAt) {
-                      <div class="status-sub">
-                        Session established: {{ status.sessionCreatedAt | date:'medium' }}
-                      </div>
-                    }
-                    <div class="status-message">{{ status.message }}</div>
-                    @if (status.connectError) {
-                      <div class="error-message">
-                        <mat-icon style="font-size:16px;width:16px;height:16px">error_outline</mat-icon>
-                        {{ status.connectError }}
-                      </div>
-                    }
-                  </div>
+                <div class="no-sessions">
+                  <mat-icon>cancel</mat-icon>
+                  <span>No Gmail sessions connected. Use one of the options below.</span>
+                </div>
+              }
+
+              @if (status?.connectError) {
+                <div class="error-message" style="margin-top:8px">
+                  <mat-icon style="font-size:16px;width:16px;height:16px">error_outline</mat-icon>
+                  {{ status!.connectError }}
                 </div>
               }
             }
           </mat-card-content>
 
-          <mat-divider></mat-divider>
-
           @if (status?.cloudEnvironment) {
             <div class="cloud-notice">
               <mat-icon class="cloud-notice-icon">cloud</mat-icon>
               <span>Running in a cloud / headless environment — browser login is not available.
-                Use <strong>Upload Session File</strong> below to connect.</span>
+                Use <strong>Upload Session File</strong> or <strong>Connect via Gmail Cookies</strong> below.</span>
             </div>
           }
 
+          <mat-divider></mat-divider>
+
           <mat-card-actions>
-            <!-- Hidden file picker — triggered by the upload button -->
             <input #fileInput type="file" accept=".json" style="display:none"
                    (change)="onFileSelected($event)">
 
             @if (!status?.connecting) {
               @if (!status?.cloudEnvironment) {
-                @if (!status?.connected) {
-                  <button mat-raised-button color="primary" (click)="connect()">
-                    <mat-icon>open_in_new</mat-icon>
-                    Connect Gmail
-                  </button>
-                } @else {
-                  <button mat-raised-button color="primary" (click)="connect()">
-                    <mat-icon>refresh</mat-icon>
-                    Re-connect Gmail
-                  </button>
-                  <button mat-stroked-button color="warn" (click)="disconnect()" style="margin-left:8px">
-                    <mat-icon>link_off</mat-icon>
-                    Disconnect
-                  </button>
-                }
-              } @else if (status?.connected) {
-                <button mat-stroked-button color="warn" (click)="disconnect()">
-                  <mat-icon>link_off</mat-icon>
-                  Disconnect
+                <button mat-raised-button color="primary" (click)="connect()">
+                  <mat-icon>add</mat-icon>
+                  Add Gmail Account
                 </button>
               }
               <button mat-stroked-button (click)="fileInput.click()"
@@ -140,29 +146,28 @@ import { switchMap, takeWhile } from 'rxjs/operators';
         <!-- How it works -->
         <mat-card class="info-card">
           <mat-card-header>
-            <mat-card-title>How Gmail Session Works</mat-card-title>
+            <mat-card-title>How Gmail Sessions Work</mat-card-title>
           </mat-card-header>
           <mat-card-content>
             <p class="section-heading">Running locally (normal setup)</p>
             <ol class="steps-list">
-              <li>Click <strong>Connect Gmail</strong> — a Chrome browser window opens on your computer.</li>
-              <li>Log into your Gmail account in that window (including any 2-step verification).</li>
-              <li>Once you reach the Gmail inbox, the session is saved and the browser closes automatically.</li>
-              <li>Playwright reuses the saved session to send emails — no username or password stored in the app.</li>
-              <li>If the session expires later, click <strong>Re-connect Gmail</strong>.</li>
+              <li>Click <strong>Add Gmail Account</strong> — a Chrome browser window opens.</li>
+              <li>Log into the Gmail account you want to send from.</li>
+              <li>Once you reach the Gmail inbox the session is saved automatically.</li>
+              <li>Repeat for each additional Gmail account you want to use.</li>
+              <li>When creating a campaign, choose which account to send from.</li>
             </ol>
             <p class="section-heading" style="margin-top:16px">Running in a headless / cloud environment (e.g. Cloud Foundry)</p>
             <ol class="steps-list">
-              <li>Run the app <strong>locally</strong> on your laptop: <code>java -jar campaign-manager-1.0.0.jar</code></li>
-              <li>Go to <strong>http://localhost:8080 → Settings → Connect Gmail</strong> and log in.</li>
-              <li>The session file is saved to <code>./data/gmail-session.json</code> in the directory where you ran the JAR.</li>
-              <li>Come back to <strong>this Settings page</strong> on the cloud app and click <strong>Upload Session File</strong>.</li>
-              <li>Pick the <code>gmail-session.json</code> file — done.</li>
+              <li>Run the app locally: <code>java -jar campaign-manager-1.0.0.jar</code></li>
+              <li>Go to <strong>http://localhost:8080 → Settings → Add Gmail Account</strong> and log in.</li>
+              <li>The session is saved to <code>./data/sessions/&#123;email&#125;.json</code>.</li>
+              <li>Upload that file here using <strong>Upload Session File</strong>.</li>
             </ol>
           </mat-card-content>
         </mat-card>
 
-        <!-- Option 3: Paste JSON directly -->
+        <!-- Paste Session JSON -->
         <mat-card class="info-card" style="margin-top:24px">
           <mat-card-header>
             <div mat-card-avatar class="paste-avatar">
@@ -170,15 +175,14 @@ import { switchMap, takeWhile } from 'rxjs/operators';
             </div>
             <mat-card-title>Paste Session JSON</mat-card-title>
             <mat-card-subtitle>
-              Can't run the JAR locally or use the file picker? Paste the contents of
-              <code>gmail-session.json</code> directly here.
+              Paste the contents of a <code>gmail-session.json</code> Playwright storageState file directly.
             </mat-card-subtitle>
           </mat-card-header>
           <mat-card-content>
             <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
               <mat-label>Paste gmail-session.json contents</mat-label>
               <textarea matInput [(ngModel)]="pastedJson" rows="6"
-                        placeholder='{"cookies":[...],"origins":[...]}'></textarea>
+                        placeholder='{"cookies":[...],"origins":[]}'></textarea>
             </mat-form-field>
           </mat-card-content>
           <mat-divider></mat-divider>
@@ -192,7 +196,7 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           </mat-card-actions>
         </mat-card>
 
-        <!-- Option 4: Cookie Editor (no install required) -->
+        <!-- Cookie Editor (no install required) -->
         <mat-card class="info-card" style="margin-top:24px">
           <mat-card-header>
             <div mat-card-avatar class="cookie-avatar">
@@ -238,8 +242,8 @@ import { switchMap, takeWhile } from 'rxjs/operators';
     </app-nav>
   `,
   styles: [`
-    .settings-card { max-width: 680px; margin-bottom: 24px; }
-    .info-card     { max-width: 680px; }
+    .settings-card { max-width: 760px; margin-bottom: 24px; }
+    .info-card     { max-width: 760px; }
     mat-card-header { margin-bottom: 16px; }
     .gmail-avatar {
       background: #ea4335; display: flex; align-items: center; justify-content: center;
@@ -256,15 +260,20 @@ import { switchMap, takeWhile } from 'rxjs/operators';
       display: flex; align-items: flex-start; gap: 16px;
       padding: 16px 0; min-height: 48px;
     }
-    .icon-connected    { color: #34a853; font-size: 28px; width: 28px; height: 28px; flex-shrink: 0; }
-    .icon-disconnected { color: #ea4335; font-size: 28px; width: 28px; height: 28px; flex-shrink: 0; }
-    .status-label   { font-weight: 600; font-size: 16px; }
-    .status-sub     { font-size: 13px; color: #5f6368; margin-top: 2px; }
-    .status-message { font-size: 13px; color: #5f6368; margin-top: 4px; }
-    .status-text    { color: #5f6368; }
-    .error-message  {
+    .status-text { color: #5f6368; }
+    .no-sessions {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 0; color: #9aa0a6; font-size: 14px;
+      mat-icon { color: #ea4335; }
+    }
+    .sessions-table { width: 100%; margin-bottom: 8px; }
+    .session-email { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+    .email-icon { color: #34a853; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .email-addr { font-weight: 600; font-size: 14px; color: #202124; }
+    .email-sub  { font-size: 12px; color: #5f6368; }
+    .error-message {
       display: flex; align-items: center; gap: 4px;
-      font-size: 13px; color: #c5221f; margin-top: 6px;
+      font-size: 13px; color: #c5221f;
     }
     mat-card-actions { padding: 8px 16px 12px; display: flex; align-items: center; }
     .steps-list { margin: 0; padding-left: 20px; line-height: 2; color: #3c4043; }
@@ -291,6 +300,7 @@ import { switchMap, takeWhile } from 'rxjs/operators';
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   status: GmailSessionStatus | null = null;
+  sessions: ConnectedSession[] = [];
   loading = true;
   uploading = false;
   pastedJson = '';
@@ -313,7 +323,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
   loadStatus(): void {
     this.loading = true;
     this.settingsService.getStatus().subscribe({
-      next: s => { this.status = s; this.loading = false; },
+      next: s => {
+        this.status = s;
+        this.sessions = s.sessions ?? [];
+        this.loading = false;
+      },
       error: () => { this.loading = false; }
     });
   }
@@ -322,6 +336,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.settingsService.connectGmail().subscribe({
       next: s => {
         this.status = s;
+        this.sessions = s.sessions ?? [];
         if (s.connecting) {
           this.snackBar.open(
             'Chrome window opened — log into Gmail, then wait for this page to update.',
@@ -331,9 +346,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
         }
       },
       error: (err) => {
-        const msg: string = err?.error?.message
-          ?? 'Could not start browser. Check that the app is running.';
-        if (err?.error) { this.status = { ...this.status!, message: msg }; }
+        const msg: string = err?.error?.message ?? 'Could not start browser.';
         this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });
@@ -343,28 +356,31 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
     this.uploading = true;
+    this.snackBar.open('Uploading and verifying session — this may take 10–20 seconds…', '', { duration: 30000 });
     this.settingsService.uploadSession(file).subscribe({
       next: s => {
         this.status = s;
+        this.sessions = s.sessions ?? [];
         this.uploading = false;
-        this.snackBar.open('Session file uploaded — Gmail is now connected!', '', {
+        this.snackBar.dismiss();
+        this.snackBar.open(s.message || 'Session uploaded!', '', {
           duration: 5000, panelClass: 'snack-success'
         });
       },
       error: (err) => {
         this.uploading = false;
-        const msg = err?.error?.message ?? 'Upload failed. Make sure the file is a valid gmail-session.json.';
+        this.snackBar.dismiss();
+        const msg = err?.error?.message ?? 'Upload failed.';
         this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });
-    // Reset the input so the same file can be re-uploaded if needed
     (event.target as HTMLInputElement).value = '';
   }
 
   savePastedJson(): void {
     const trimmed = this.pastedJson.trim();
     try {
-      JSON.parse(trimmed); // validate it's valid JSON before sending
+      JSON.parse(trimmed);
     } catch {
       this.snackBar.open('Invalid JSON — please paste the full contents of gmail-session.json.', 'Close', {
         duration: 6000, panelClass: 'snack-error'
@@ -374,18 +390,22 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const blob = new Blob([trimmed], { type: 'application/json' });
     const file = new File([blob], 'gmail-session.json', { type: 'application/json' });
     this.uploading = true;
+    this.snackBar.open('Saving and verifying session — this may take 10–20 seconds…', '', { duration: 30000 });
     this.settingsService.uploadSession(file).subscribe({
       next: s => {
         this.status = s;
+        this.sessions = s.sessions ?? [];
         this.uploading = false;
         this.pastedJson = '';
-        this.snackBar.open('Session saved — Gmail is now connected!', '', {
+        this.snackBar.dismiss();
+        this.snackBar.open(s.message || 'Session saved!', '', {
           duration: 5000, panelClass: 'snack-success'
         });
       },
       error: (err) => {
         this.uploading = false;
-        const msg = err?.error?.message ?? 'Save failed. Make sure the JSON is a valid gmail-session.json.';
+        this.snackBar.dismiss();
+        const msg = err?.error?.message ?? 'Save failed.';
         this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });
@@ -402,46 +422,52 @@ export class SettingsComponent implements OnInit, OnDestroy {
       return;
     }
     this.uploading = true;
+    this.snackBar.open('Importing cookies and verifying session — this may take 10–20 seconds…', '', { duration: 30000 });
     this.settingsService.importCookies(trimmed).subscribe({
       next: s => {
         this.status = s;
+        this.sessions = s.sessions ?? [];
         this.uploading = false;
         this.cookieJson = '';
-        this.snackBar.open('Gmail cookies imported — connected!', '', {
+        this.snackBar.dismiss();
+        this.snackBar.open(s.message || 'Gmail cookies imported!', '', {
           duration: 5000, panelClass: 'snack-success'
         });
       },
       error: err => {
         this.uploading = false;
-        const msg = err?.error?.message ?? 'Import failed. Make sure you exported all cookies from Gmail.';
+        this.snackBar.dismiss();
+        const msg = err?.error?.message ?? 'Import failed.';
         this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
       }
     });
   }
 
-  disconnect(): void {
-    this.settingsService.disconnectGmail().subscribe({
+  disconnectOne(email: string): void {
+    if (!confirm(`Disconnect ${email}? Campaigns assigned to this account will fail to send.`)) return;
+    this.settingsService.disconnectSession(email).subscribe({
       next: s => {
         this.status = s;
-        this.snackBar.open('Gmail session disconnected.', '', { duration: 3000 });
+        this.sessions = s.sessions ?? [];
+        this.snackBar.open(`${email} disconnected.`, '', { duration: 3000 });
       },
       error: () => this.snackBar.open('Disconnect failed', 'Close', { duration: 4000 })
     });
   }
 
-  /** Poll /status every 3 seconds while connecting; stops automatically when done. */
   private startPolling(): void {
     this.stopPolling();
     this.pollSub = interval(3000).pipe(
       switchMap(() => this.settingsService.getStatus()),
-      takeWhile(s => s.connecting, true)  // include final non-connecting value then stop
+      takeWhile(s => s.connecting, true)
     ).subscribe(s => {
       this.status = s;
+      this.sessions = s.sessions ?? [];
       if (!s.connecting) {
         this.stopPolling();
         this.snackBar.dismiss();
         if (s.connected) {
-          this.snackBar.open('Gmail session connected!', '', {
+          this.snackBar.open('Gmail account connected!', '', {
             duration: 4000, panelClass: 'snack-success'
           });
         } else if (s.connectError) {

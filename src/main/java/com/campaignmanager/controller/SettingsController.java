@@ -1,6 +1,8 @@
 package com.campaignmanager.controller;
 
+import com.campaignmanager.dto.ConnectedSessionDto;
 import com.campaignmanager.dto.GmailSessionStatusDto;
+import com.campaignmanager.repository.CampaignRepository;
 import com.campaignmanager.service.PlaywrightSessionService;
 import com.campaignmanager.service.PlaywrightSystemDepsInstaller;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -13,10 +15,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/settings")
@@ -24,32 +31,51 @@ import java.util.Map;
 @Slf4j
 public class SettingsController {
 
+    private static final String SESSIONS_DIR = "./data/sessions";
+
     private final PlaywrightSessionService sessionService;
     private final PlaywrightSystemDepsInstaller systemDepsInstaller;
+    private final CampaignRepository campaignRepository;
 
-    /**
-     * Returns current Gmail session status.
-     * The frontend polls this endpoint every few seconds while connecting.
-     */
+    // ─── Status ───────────────────────────────────────────────────────────────
+
     @GetMapping("/gmail/status")
     public GmailSessionStatusDto getStatus() {
         return buildStatus();
     }
 
-    /**
-     * Starts the Gmail session setup asynchronously.
-     * Opens a browser in a background thread — returns immediately (202 Accepted).
-     * The frontend polls GET /status to detect completion.
-     *
-     * Not available in headless/cloud environments (no display server). In those
-     * environments the user must upload a gmail-session.json via the upload endpoint.
-     */
+    // ─── List / Disconnect Sessions ───────────────────────────────────────────
+
+    /** Returns all connected Gmail accounts with session metadata. */
+    @GetMapping("/gmail/sessions")
+    public List<ConnectedSessionDto> listSessions() {
+        return buildSessionList();
+    }
+
+    /** Disconnects a specific Gmail account (URL-encoded email in path). */
+    @DeleteMapping("/gmail/sessions/{email}")
+    public ResponseEntity<GmailSessionStatusDto> disconnectByEmail(@PathVariable String email) {
+        try {
+            String decoded = URLDecoder.decode(email, StandardCharsets.UTF_8);
+            sessionService.disconnectSession(decoded);
+            log.info("Disconnected Gmail session for {}", decoded);
+            return ResponseEntity.ok(buildStatus());
+        } catch (Exception e) {
+            log.error("Disconnect failed for {}: {}", email, e.getMessage());
+            GmailSessionStatusDto dto = buildStatus();
+            dto.setMessage("Disconnect failed: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(dto);
+        }
+    }
+
+    // ─── Connect (local browser) ──────────────────────────────────────────────
+
     @PostMapping("/gmail/connect")
     public ResponseEntity<GmailSessionStatusDto> connect() {
         if (systemDepsInstaller.isCloudFoundry()) {
             GmailSessionStatusDto dto = buildStatus();
             dto.setMessage("Connect Gmail is not available in this environment — no display server. " +
-                    "Generate a gmail-session.json locally and upload it using the 'Upload Session File' button below.");
+                    "Use 'Upload Session File' or 'Connect via Gmail Cookies' below.");
             return ResponseEntity.badRequest().body(dto);
         }
         if (sessionService.isConnecting()) {
@@ -62,16 +88,18 @@ public class SettingsController {
         return ResponseEntity.ok(dto);
     }
 
-    /**
-     * Removes the saved Gmail session.
-     */
+    // ─── Disconnect (legacy single-session endpoint — kept for backward compat) ─
+
     @DeleteMapping("/gmail/disconnect")
     public ResponseEntity<GmailSessionStatusDto> disconnect() {
         try {
-            sessionService.disconnectSession();
+            // Disconnect all sessions
+            for (String email : sessionService.listConnectedEmails()) {
+                sessionService.disconnectSession(email);
+            }
             GmailSessionStatusDto dto = new GmailSessionStatusDto();
             dto.setConnected(false);
-            dto.setMessage("Gmail session disconnected.");
+            dto.setMessage("All Gmail sessions disconnected.");
             return ResponseEntity.ok(dto);
         } catch (Exception e) {
             log.error("Disconnect failed: {}", e.getMessage());
@@ -82,89 +110,143 @@ public class SettingsController {
         }
     }
 
+    // ─── Upload Session File ──────────────────────────────────────────────────
+
     /**
-     * Accepts an uploaded gmail-session.json file (exported from a local machine where
-     * Gmail login was completed). This is the only way to establish a Gmail session
-     * in a headless/cloud environment where a visible browser cannot be opened.
-     *
-     * Usage: cf curl /api/settings/gmail/upload-session -X POST -F "file=@./data/gmail-session.json"
-     * Or use the Settings page upload button.
+     * Accepts an uploaded gmail-session.json Playwright storageState file.
+     * Detects the Gmail account synchronously (opens headless browser, navigates
+     * to Gmail, reads page title) and saves as sessions/{email}.json.
      */
     @PostMapping("/gmail/upload-session")
     public ResponseEntity<GmailSessionStatusDto> uploadSession(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
-            GmailSessionStatusDto dto = new GmailSessionStatusDto();
-            dto.setConnected(false);
+            GmailSessionStatusDto dto = buildStatus();
             dto.setMessage("Uploaded file is empty.");
             return ResponseEntity.badRequest().body(dto);
         }
+        Path tempPath = Paths.get(SESSIONS_DIR, "upload-" + System.currentTimeMillis() + ".json");
         try {
-            Path sessionPath = sessionService.getSessionPath();
-            Files.createDirectories(sessionPath.getParent());
-            // Use InputStream copy so the absolute path is honoured regardless of
-            // Tomcat's working directory (transferTo(File) resolves relative paths
-            // against Tomcat's temp dir, not the Spring Boot app root).
+            Files.createDirectories(tempPath.getParent());
             try (var in = file.getInputStream()) {
-                Files.copy(in, sessionPath, StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(in, tempPath, StandardCopyOption.REPLACE_EXISTING);
             }
-            sessionService.invalidateCachedContext();
-            log.info("Gmail session uploaded via file upload ({} bytes)", file.getSize());
-            // Detect the Gmail account email from the uploaded session in the background
-            sessionService.detectEmailInBackground();
+
+            String email = sessionService.detectEmailSync(tempPath);
+            if (email == null) {
+                Files.deleteIfExists(tempPath);
+                GmailSessionStatusDto dto = buildStatus();
+                dto.setMessage("Could not detect Gmail account from this session file. " +
+                        "Make sure the session was exported from a logged-in Gmail inbox.");
+                return ResponseEntity.badRequest().body(dto);
+            }
+
+            Path finalPath = sessionService.getSessionPath(email);
+            Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
+            sessionService.invalidateCachedContext(email);
+            log.info("Gmail session uploaded for {} ({} bytes)", email, file.getSize());
+
             GmailSessionStatusDto dto = buildStatus();
-            dto.setMessage("Session file uploaded successfully. Gmail is now connected.");
+            dto.setConnectedEmail(email);
+            dto.setMessage("Session uploaded for " + email + ". Gmail is now connected.");
             return ResponseEntity.ok(dto);
         } catch (Exception e) {
-            log.error("Session file upload failed: {}", e.getMessage());
-            GmailSessionStatusDto dto = new GmailSessionStatusDto();
-            dto.setConnected(false);
+            try { Files.deleteIfExists(tempPath); } catch (Exception ignored) {}
+            log.error("Session upload failed: {}", e.getMessage());
+            GmailSessionStatusDto dto = buildStatus();
             dto.setMessage("Upload failed: " + e.getMessage());
             return ResponseEntity.internalServerError().body(dto);
         }
     }
 
+    // ─── Import Cookie Editor JSON ────────────────────────────────────────────
+
     /**
      * Accepts cookies exported by the "Cookie Editor" Chrome extension (a JSON array)
-     * and converts them to the Playwright storageState format ({cookies:[...],origins:[]}).
-     * This allows non-technical users to establish a Gmail session with zero local installs:
-     * install Cookie Editor → log into Gmail → Export → paste here.
-     *
-     * Also accepts a pre-converted Playwright session JSON (passed through unchanged).
+     * and converts them to Playwright storageState format, then saves per-email.
      */
     @PostMapping("/gmail/import-cookies")
     public ResponseEntity<GmailSessionStatusDto> importCookies(@RequestBody Map<String, String> body) {
+        Path tempPath = Paths.get(SESSIONS_DIR, "import-" + System.currentTimeMillis() + ".json");
         try {
             String cookieEditorJson = body.getOrDefault("cookieJson", "");
             String playwrightJson = convertCookieEditorToPlaywright(cookieEditorJson);
-            Path sessionPath = sessionService.getSessionPath();
-            Files.createDirectories(sessionPath.getParent());
-            Files.writeString(sessionPath, playwrightJson);
-            sessionService.invalidateCachedContext();
-            log.info("Gmail session imported from Cookie Editor JSON ({} chars)", playwrightJson.length());
-            sessionService.detectEmailInBackground();
+
+            Files.createDirectories(tempPath.getParent());
+            Files.writeString(tempPath, playwrightJson);
+
+            String email = sessionService.detectEmailSync(tempPath);
+            if (email == null) {
+                Files.deleteIfExists(tempPath);
+                GmailSessionStatusDto dto = buildStatus();
+                dto.setMessage("Could not verify Gmail account from these cookies. " +
+                        "Make sure you are logged into Gmail before exporting cookies.");
+                return ResponseEntity.badRequest().body(dto);
+            }
+
+            Path finalPath = sessionService.getSessionPath(email);
+            Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
+            sessionService.invalidateCachedContext(email);
+            log.info("Gmail session imported from Cookie Editor JSON for {}", email);
+
             GmailSessionStatusDto dto = buildStatus();
-            dto.setMessage("Gmail cookies imported successfully. Gmail is now connected.");
+            dto.setConnectedEmail(email);
+            dto.setMessage("Gmail cookies imported for " + email + ". Gmail is now connected.");
             return ResponseEntity.ok(dto);
         } catch (Exception e) {
+            try { Files.deleteIfExists(tempPath); } catch (Exception ignored) {}
             log.error("Cookie import failed: {}", e.getMessage());
-            GmailSessionStatusDto dto = new GmailSessionStatusDto();
+            GmailSessionStatusDto dto = buildStatus();
             dto.setConnected(false);
             dto.setMessage("Cookie import failed: " + e.getMessage());
             return ResponseEntity.badRequest().body(dto);
         }
     }
 
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private List<ConnectedSessionDto> buildSessionList() {
+        return sessionService.listConnectedEmails().stream().map(email -> {
+            ConnectedSessionDto s = new ConnectedSessionDto();
+            s.setEmail(email);
+            s.setConnectedAt(sessionService.getSessionCreatedAt(email));
+            s.setCampaignCount((int) campaignRepository.countByGmailEmail(email));
+            return s;
+        }).collect(Collectors.toList());
+    }
+
+    private GmailSessionStatusDto buildStatus() {
+        GmailSessionStatusDto dto = new GmailSessionStatusDto();
+        dto.setConnected(sessionService.hasAnySession());
+        dto.setConnecting(sessionService.isConnecting());
+        dto.setConnectError(sessionService.getConnectError());
+        dto.setSessionCreatedAt(sessionService.getSessionCreatedAt());
+        dto.setConnectedEmail(sessionService.getConnectedEmail());
+        dto.setCloudEnvironment(systemDepsInstaller.isCloudFoundry());
+        dto.setSessions(buildSessionList());
+
+        if (dto.isConnecting()) {
+            dto.setMessage("Browser is open — please log into Gmail. Do not close the browser window.");
+        } else if (dto.getConnectError() != null) {
+            dto.setMessage("Last attempt failed: " + dto.getConnectError());
+        } else if (dto.isConnected()) {
+            int count = dto.getSessions().size();
+            dto.setMessage(count + " Gmail session" + (count > 1 ? "s" : "") + " active.");
+        } else {
+            dto.setMessage("No Gmail session. Click 'Connect Gmail' or use one of the options below.");
+        }
+        return dto;
+    }
+
     /**
      * Converts a Cookie Editor JSON array to Playwright storageState format.
-     * If the input is already a Playwright object (has "cookies" key), returns it unchanged.
+     * Also accepts a pre-converted Playwright session object (passed through).
      */
     private String convertCookieEditorToPlaywright(String json) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(json);
 
-        // Already Playwright format — pass through
         if (root.isObject() && root.has("cookies")) {
-            return json;
+            return json; // Already Playwright format
         }
         if (!root.isArray()) {
             throw new IllegalArgumentException(
@@ -180,7 +262,6 @@ public class SettingsController {
             pc.put("path",     c.path("path").asText("/"));
             pc.put("httpOnly", c.path("httpOnly").asBoolean(false));
             pc.put("secure",   c.path("secure").asBoolean(false));
-            // session cookies have no persistent expiry → -1 means session-scoped in Playwright
             if (c.has("expirationDate") && !c.path("session").asBoolean(false)) {
                 pc.put("expires", c.path("expirationDate").asLong());
             } else {
@@ -199,26 +280,5 @@ public class SettingsController {
         result.set("cookies", playwrightCookies);
         result.putArray("origins");
         return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
-    }
-
-    private GmailSessionStatusDto buildStatus() {
-        GmailSessionStatusDto dto = new GmailSessionStatusDto();
-        dto.setConnected(sessionService.isSessionActive());
-        dto.setConnecting(sessionService.isConnecting());
-        dto.setConnectError(sessionService.getConnectError());
-        dto.setSessionCreatedAt(sessionService.getSessionCreatedAt());
-        dto.setConnectedEmail(sessionService.getConnectedEmail());
-        dto.setCloudEnvironment(systemDepsInstaller.isCloudFoundry());
-
-        if (dto.isConnecting()) {
-            dto.setMessage("Browser is open — please log into Gmail. Do not close the browser window.");
-        } else if (dto.getConnectError() != null) {
-            dto.setMessage("Last attempt failed: " + dto.getConnectError());
-        } else if (dto.isConnected()) {
-            dto.setMessage("Gmail session is active. Emails will be sent using the saved session.");
-        } else {
-            dto.setMessage("No Gmail session. Click 'Connect Gmail' to log in.");
-        }
-        return dto;
     }
 }
