@@ -234,13 +234,15 @@ public class ExcelImportService {
         log.info("Direct format columns: name={} title={} email={} emailLink={} optOut={} emailDates={}",
                 nameCol, titleCol, emailCol, emailLinkCol, optOutCol, java.util.Arrays.toString(emailDateCols));
 
-        // AE/SA email filtering: only import rows whose AE/SA column matches the
-        // connected Gmail session email. If no rows match, fail with a clear message.
-        String sessionEmail = sessionService.getConnectedEmail();
+        // AE/SA email filtering: prefer the campaign's assigned Gmail account; fall back
+        // to the first connected session. If neither is known, skip the filter.
+        String campaignEmail = campaign.getGmailEmail();
+        String sessionEmail = (campaignEmail != null && !campaignEmail.isBlank())
+                ? campaignEmail
+                : sessionService.getConnectedEmail();
         boolean filterByAeSa = aeRoleCol >= 0 && sessionEmail != null;
         if (aeRoleCol >= 0 && sessionEmail == null) {
-            log.warn("AE/SA column found but connected Gmail email is unknown — skipping AE/SA filter. " +
-                     "Re-upload the Gmail session to enable sender filtering.");
+            log.warn("AE/SA column found but no Gmail account is assigned — skipping AE/SA filter.");
         }
         log.info("AE/SA filter: sessionEmail={} filterEnabled={}", sessionEmail, filterByAeSa);
 
