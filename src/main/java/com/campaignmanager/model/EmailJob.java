@@ -38,7 +38,7 @@ public class EmailJob {
     private LocalDateTime sentAt;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "VARCHAR(20)")
     private EmailJobStatus status = EmailJobStatus.SCHEDULED;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
