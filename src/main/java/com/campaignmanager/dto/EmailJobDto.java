@@ -21,4 +21,5 @@ public class EmailJobDto {
     private LocalDateTime sentAt;
     private EmailJobStatus status;
     private String errorMessage;
+    private String gmailEmail;
 }

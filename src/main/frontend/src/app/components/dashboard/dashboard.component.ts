@@ -173,7 +173,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     </ng-container>
                     <ng-container matColumnDef="gmailEmail">
                       <th mat-header-cell *matHeaderCellDef mat-sort-header="gmailEmail">Email Sender</th>
-                      <td mat-cell *matCellDef="let c">{{ c.gmailEmail || gmailStatus?.connectedEmail || '—' }}</td>
+                      <td mat-cell *matCellDef="let c">{{ c.gmailEmail || '—' }}</td>
                     </ng-container>
                     <ng-container matColumnDef="status">
                       <th mat-header-cell *matHeaderCellDef mat-sort-header="status">Status</th>
@@ -250,7 +250,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     </ng-container>
                     <ng-container matColumnDef="sender">
                       <th mat-header-cell *matHeaderCellDef mat-sort-header="sender">Email Sender</th>
-                      <td mat-cell *matCellDef="let j">{{ gmailStatus?.connectedEmail ?? '—' }}</td>
+                      <td mat-cell *matCellDef="let j">{{ j.gmailEmail || '—' }}</td>
                     </ng-container>
                     <ng-container matColumnDef="time">
                       <th mat-header-cell *matHeaderCellDef mat-sort-header="time">
@@ -405,7 +405,7 @@ export class DashboardComponent implements OnInit {
       this.jobsDS.sortingDataAccessor = (item: EmailJob, prop: string) => {
         switch (prop) {
           case 'time':   return this.activePanel === 'sent' ? (item.sentAt ?? '') : (item.scheduledAt ?? '');
-          case 'sender': return this.gmailStatus?.connectedEmail ?? '';
+          case 'sender': return item.gmailEmail ?? '';
           default:       return (item as any)[prop] ?? '';
         }
       };
@@ -498,13 +498,12 @@ export class DashboardComponent implements OnInit {
 
   applyFilter(value: string): void {
     const filter = value.trim().toLowerCase();
-    const sender = this.gmailStatus?.connectedEmail?.toLowerCase() ?? '';
     this.jobsDS.filterPredicate = (job: EmailJob, f: string) =>
       job.contactName.toLowerCase().includes(f) ||
       job.contactEmail.toLowerCase().includes(f) ||
       job.campaignName.toLowerCase().includes(f) ||
       job.subject.toLowerCase().includes(f) ||
-      sender.includes(f);
+      (job.gmailEmail?.toLowerCase() ?? '').includes(f);
     this.jobsDS.filter = filter;
   }
 

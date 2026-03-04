@@ -13,6 +13,7 @@ export interface EmailJob {
   sentAt?: string;
   status: 'SCHEDULED' | 'SENT' | 'FAILED' | 'SKIPPED';
   errorMessage?: string;
+  gmailEmail?: string;
 }
 
 export interface DashboardStats {

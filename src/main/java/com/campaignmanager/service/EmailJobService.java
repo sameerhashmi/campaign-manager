@@ -62,6 +62,7 @@ public class EmailJobService {
         if (cc.getCampaign() != null) {
             dto.setCampaignId(cc.getCampaign().getId());
             dto.setCampaignName(cc.getCampaign().getName());
+            dto.setGmailEmail(cc.getCampaign().getGmailEmail());
         }
         if (cc.getContact() != null) {
             dto.setContactId(cc.getContact().getId());
