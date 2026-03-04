@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -50,6 +51,19 @@ public class SettingsController {
     @GetMapping("/gmail/sessions")
     public List<ConnectedSessionDto> listSessions() {
         return buildSessionList();
+    }
+
+    /** Returns only the Gmail sessions owned by the currently logged-in user. */
+    @GetMapping("/gmail/my-sessions")
+    public List<ConnectedSessionDto> listMySessions(Authentication auth) {
+        String username = auth != null ? auth.getName() : null;
+        return sessionService.listSessionsForUser(username).stream().map(email -> {
+            ConnectedSessionDto s = new ConnectedSessionDto();
+            s.setEmail(email);
+            s.setConnectedAt(sessionService.getSessionCreatedAt(email));
+            s.setCampaignCount((int) campaignRepository.countByGmailEmail(email));
+            return s;
+        }).collect(Collectors.toList());
     }
 
     /** Disconnects a specific Gmail account (URL-encoded email in path). */
@@ -118,7 +132,8 @@ public class SettingsController {
      * to Gmail, reads page title) and saves as sessions/{email}.json.
      */
     @PostMapping("/gmail/upload-session")
-    public ResponseEntity<GmailSessionStatusDto> uploadSession(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<GmailSessionStatusDto> uploadSession(@RequestParam("file") MultipartFile file,
+                                                               Authentication auth) {
         if (file.isEmpty()) {
             GmailSessionStatusDto dto = buildStatus();
             dto.setMessage("Uploaded file is empty.");
@@ -143,6 +158,7 @@ public class SettingsController {
             Path finalPath = sessionService.getSessionPath(email);
             Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
             sessionService.invalidateCachedContext(email);
+            if (auth != null) sessionService.recordOwner(email, auth.getName());
             log.info("Gmail session uploaded for {} ({} bytes)", email, file.getSize());
 
             GmailSessionStatusDto dto = buildStatus();
@@ -165,7 +181,8 @@ public class SettingsController {
      * and converts them to Playwright storageState format, then saves per-email.
      */
     @PostMapping("/gmail/import-cookies")
-    public ResponseEntity<GmailSessionStatusDto> importCookies(@RequestBody Map<String, String> body) {
+    public ResponseEntity<GmailSessionStatusDto> importCookies(@RequestBody Map<String, String> body,
+                                                               Authentication auth) {
         Path tempPath = Paths.get(SESSIONS_DIR, "import-" + System.currentTimeMillis() + ".json");
         try {
             String cookieEditorJson = body.getOrDefault("cookieJson", "");
@@ -186,6 +203,7 @@ public class SettingsController {
             Path finalPath = sessionService.getSessionPath(email);
             Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
             sessionService.invalidateCachedContext(email);
+            if (auth != null) sessionService.recordOwner(email, auth.getName());
             log.info("Gmail session imported from Cookie Editor JSON for {}", email);
 
             GmailSessionStatusDto dto = buildStatus();

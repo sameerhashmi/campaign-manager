@@ -20,6 +20,7 @@ public class CampaignDto {
     private String gmailEmail;
 
     private String tanzuContact;
+    private String company;
 
     private CampaignStatus status;
     private LocalDateTime createdAt;

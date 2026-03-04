@@ -46,6 +46,12 @@ import { SettingsService, GmailSessionStatus, ConnectedSession } from '../../../
               </mat-form-field>
 
               <mat-form-field appearance="outline">
+                <mat-label>Company</mat-label>
+                <input matInput formControlName="company" placeholder="e.g. Citadel">
+                <mat-hint>The company this campaign is targeting</mat-hint>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
                 <mat-label>Description (optional)</mat-label>
                 <textarea matInput formControlName="description" rows="2"></textarea>
               </mat-form-field>
@@ -343,6 +349,7 @@ export class CampaignFormComponent implements OnInit {
   ) {
     this.form = this.fb.group({
       name: ['', Validators.required],
+      company: [''],
       description: [''],
       gmailEmail: [''],
       tanzuContact: ['']
@@ -351,7 +358,7 @@ export class CampaignFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
-    this.settingsService.getSessions().subscribe({
+    this.settingsService.getMySessions().subscribe({
       next: sessions => { this.connectedSessions = sessions; },
       error: () => {}
     });
@@ -361,6 +368,7 @@ export class CampaignFormComponent implements OnInit {
       this.campaignService.getById(this.editId).subscribe(c => {
         this.form.patchValue({
           name: c.name,
+          company: c.company,
           description: c.description,
           gmailEmail: c.gmailEmail,
           tanzuContact: c.tanzuContact

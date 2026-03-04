@@ -113,10 +113,19 @@ public class PlaywrightGmailService {
         //      followed by two newlines so there is a blank line between body and sig.
         // If no signature is present the cursor is placed at the very start of the
         // body and the text is inserted there (same as before).
+        // Build an HTML version of the body with explicit black colour so Gmail's
+        // compose context (dark theme, signature colour bleed, etc.) cannot override it.
+        String htmlBody = "<div style=\"color:#000000;font-family:Arial,sans-serif;font-size:14px\">"
+                + body.replace("&", "&amp;")
+                      .replace("<", "&lt;")
+                      .replace(">", "&gt;")
+                      .replace("\n", "<br>")
+                + "</div>";
+
         page.click("div[aria-label='Message Body']");
         page.waitForTimeout(300);
         page.evaluate(
-            "(text) => {" +
+            "(html) => {" +
             "  const body = document.querySelector('div[aria-label=\"Message Body\"]');" +
             "  if (!body) return;" +
             "  body.focus();" +
@@ -130,16 +139,16 @@ public class PlaywrightGmailService {
             "    range.collapse(true);" +
             "    sel.removeAllRanges();" +
             "    sel.addRange(range);" +
-            "    document.execCommand('insertText', false, text + '\\n\\n');" +
+            "    document.execCommand('insertHTML', false, html + '<br><br>');" +
             "  } else {" +
             "    range.setStart(body, 0);" +
             "    range.collapse(true);" +
             "    sel.removeAllRanges();" +
             "    sel.addRange(range);" +
-            "    document.execCommand('insertText', false, text);" +
+            "    document.execCommand('insertHTML', false, html);" +
             "  }" +
             "}",
-            body);
+            htmlBody);
 
         // ── Step 5: Send ─────────────────────────────────────────────────────────
         // Primary: click Gmail's Send button (.aoO is the compose Send button class).

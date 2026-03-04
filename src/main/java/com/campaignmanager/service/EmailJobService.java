@@ -53,6 +53,20 @@ public class EmailJobService {
         return toDto(emailJobRepository.save(job));
     }
 
+    @Transactional
+    public EmailJobDto toggleHold(Long id) {
+        EmailJob job = emailJobRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Email job not found: " + id));
+        if (job.getStatus() == EmailJobStatus.SCHEDULED) {
+            job.setStatus(EmailJobStatus.HOLD);
+        } else if (job.getStatus() == EmailJobStatus.HOLD) {
+            job.setStatus(EmailJobStatus.SCHEDULED);
+        } else {
+            throw new RuntimeException("Only SCHEDULED or HOLD jobs can be toggled");
+        }
+        return toDto(emailJobRepository.save(job));
+    }
+
     public EmailJobDto toDto(EmailJob j) {
         EmailJobDto dto = new EmailJobDto();
         dto.setId(j.getId());

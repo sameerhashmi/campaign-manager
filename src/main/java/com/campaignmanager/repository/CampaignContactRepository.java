@@ -17,4 +17,6 @@ public interface CampaignContactRepository extends JpaRepository<CampaignContact
     long countByCampaignId(@Param("campaignId") Long campaignId);
 
     void deleteByCampaignId(Long campaignId);
+
+    List<CampaignContact> findByContactId(Long contactId);
 }

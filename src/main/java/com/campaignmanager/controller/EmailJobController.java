@@ -23,4 +23,9 @@ public class EmailJobController {
     public EmailJobDto retry(@PathVariable Long id) {
         return emailJobService.retry(id);
     }
+
+    @PostMapping("/{id}/toggle-hold")
+    public EmailJobDto toggleHold(@PathVariable Long id) {
+        return emailJobService.toggleHold(id);
+    }
 }

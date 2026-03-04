@@ -1,8 +1,11 @@
 package com.campaignmanager.service;
 
 import com.campaignmanager.dto.ContactDto;
+import com.campaignmanager.model.CampaignContact;
 import com.campaignmanager.model.Contact;
+import com.campaignmanager.repository.CampaignContactRepository;
 import com.campaignmanager.repository.ContactRepository;
+import com.campaignmanager.repository.EmailJobRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +19,8 @@ import java.util.stream.Collectors;
 public class ContactService {
 
     private final ContactRepository contactRepository;
+    private final CampaignContactRepository campaignContactRepository;
+    private final EmailJobRepository emailJobRepository;
 
     public List<ContactDto> findAll(String search) {
         List<Contact> contacts = (search != null && !search.isBlank())
@@ -54,6 +59,9 @@ public class ContactService {
 
     @Transactional
     public void delete(Long id) {
+        // Delete all CampaignContact rows (cascades to EmailJobs via CascadeType.ALL)
+        List<CampaignContact> ccs = campaignContactRepository.findByContactId(id);
+        campaignContactRepository.deleteAll(ccs);
         contactRepository.deleteById(id);
     }
 
@@ -99,6 +107,7 @@ public class ContactService {
         dto.setAeRole(c.getAeRole());
         dto.setEmailLink(c.getEmailLink());
         dto.setCreatedAt(c.getCreatedAt());
+        dto.setScheduledJobCount((int) emailJobRepository.countScheduledByContactId(c.getId()));
         return dto;
     }
 }

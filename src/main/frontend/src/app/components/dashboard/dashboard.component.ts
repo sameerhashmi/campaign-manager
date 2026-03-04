@@ -204,12 +204,16 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                       <th mat-header-cell *matHeaderCellDef mat-sort-header="name">Name</th>
                       <td mat-cell *matCellDef="let c">{{ c.name }}</td>
                     </ng-container>
+                    <ng-container matColumnDef="company">
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header="company">Company</th>
+                      <td mat-cell *matCellDef="let c">{{ c.company || '—' }}</td>
+                    </ng-container>
                     <ng-container matColumnDef="role">
                       <th mat-header-cell *matHeaderCellDef mat-sort-header="role">Role</th>
-                      <td mat-cell *matCellDef="let c">{{ c.role }}</td>
+                      <td mat-cell *matCellDef="let c">{{ c.role || '—' }}</td>
                     </ng-container>
-                    <tr mat-header-row *matHeaderRowDef="['name','role']"></tr>
-                    <tr mat-row *matRowDef="let row; columns: ['name','role'];"></tr>
+                    <tr mat-header-row *matHeaderRowDef="['name','company','role']"></tr>
+                    <tr mat-row *matRowDef="let row; columns: ['name','company','role'];"></tr>
                   </table>
                   @if (contactsDS.data.length === 0) {
                     <p class="empty-msg">No contacts yet.</p>

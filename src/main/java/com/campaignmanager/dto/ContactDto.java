@@ -27,4 +27,5 @@ public class ContactDto {
     private String emailLink;
     private LocalDateTime createdAt;
     private boolean enrolledInCampaign;
+    private int scheduledJobCount;
 }

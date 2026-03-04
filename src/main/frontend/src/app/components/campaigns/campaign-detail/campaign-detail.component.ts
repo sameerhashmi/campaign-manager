@@ -15,6 +15,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService } from '../../../services/campaign.service';
 import { ContactService } from '../../../services/contact.service';
@@ -32,7 +33,7 @@ import { EmailJobService } from '../../../services/email-job.service';
     MatTabsModule, MatCardModule, MatButtonModule, MatIconModule,
     MatFormFieldModule, MatInputModule, MatTableModule, MatSortModule, MatChipsModule,
     MatSnackBarModule, MatProgressSpinnerModule, MatCheckboxModule,
-    MatTooltipModule, NavComponent
+    MatTooltipModule, MatSlideToggleModule, NavComponent
   ],
   template: `
     <app-nav>
@@ -75,6 +76,9 @@ import { EmailJobService } from '../../../services/email-job.service';
                   <mat-card-header><mat-card-title>Campaign Settings</mat-card-title></mat-card-header>
                   <mat-card-content>
                     <div class="detail-grid">
+                      @if (campaign.company) {
+                        <div class="detail-row"><span class="label">Company</span><span>{{ campaign.company }}</span></div>
+                      }
                       <div class="detail-row">
                         <span class="label">Email Sender</span>
                         <span>{{ campaign.gmailEmail || '—' }}</span>
@@ -246,6 +250,17 @@ import { EmailJobService } from '../../../services/email-job.service';
                       <span class="status-chip {{ j.status.toLowerCase() }}">{{ j.status }}</span>
                     </td>
                   </ng-container>
+                  <ng-container matColumnDef="hold">
+                    <th mat-header-cell *matHeaderCellDef>Hold</th>
+                    <td mat-cell *matCellDef="let j">
+                      <mat-slide-toggle
+                        [checked]="j.status === 'HOLD'"
+                        [disabled]="j.status === 'SENT' || j.status === 'FAILED' || j.status === 'SKIPPED'"
+                        (change)="toggleHold(j)"
+                        matTooltip="Pause this email without losing the scheduled date">
+                      </mat-slide-toggle>
+                    </td>
+                  </ng-container>
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef></th>
                     <td mat-cell *matCellDef="let j">
@@ -294,6 +309,7 @@ import { EmailJobService } from '../../../services/email-job.service';
       &.sent      { background:#e8f5e9; color:#2e7d32; }
       &.failed    { background:#ffebee; color:#c62828; }
       &.skipped   { background:#f1f3f4; color:#5f6368; }
+      &.hold      { background:#fff8e1; color:#e65100; }
     }
     .tab-content { padding: 24px 0; }
     .tab-actions { margin-bottom: 16px; }
@@ -326,7 +342,7 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
   gsheetUrl = '';
 
   contactColumns = ['name', 'email', 'company', 'play', 'aeRole', 'phone', 'emailLink', 'actions'];
-  jobColumns = ['contact', 'step', 'subject', 'scheduledAt', 'sentAt', 'status', 'actions'];
+  jobColumns = ['contact', 'step', 'subject', 'scheduledAt', 'sentAt', 'status', 'hold', 'actions'];
 
   constructor(
     private route: ActivatedRoute,
@@ -460,6 +476,20 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
         this.campaignService.getJobs(this.campaignId).subscribe(j => {
           this.jobsDataSource.data = j;
         });
+      }
+    });
+  }
+
+  toggleHold(job: EmailJob): void {
+    this.emailJobService.toggleHold(job.id).subscribe({
+      next: updated => {
+        job.status = updated.status;
+        this.jobsDataSource._updateChangeSubscription();
+        const msg = updated.status === 'HOLD' ? 'Job placed on hold' : 'Job re-scheduled';
+        this.snackBar.open(msg, '', { duration: 2000 });
+      },
+      error: err => {
+        this.snackBar.open(err.error?.message || 'Could not toggle hold', 'Close', { duration: 3000 });
       }
     });
   }

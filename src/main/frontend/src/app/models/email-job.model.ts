@@ -11,7 +11,7 @@ export interface EmailJob {
   body: string;
   scheduledAt: string;
   sentAt?: string;
-  status: 'SCHEDULED' | 'SENT' | 'FAILED' | 'SKIPPED';
+  status: 'SCHEDULED' | 'SENT' | 'FAILED' | 'SKIPPED' | 'HOLD';
   errorMessage?: string;
   gmailEmail?: string;
 }

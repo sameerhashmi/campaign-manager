@@ -19,4 +19,8 @@ export class EmailJobService {
   retry(id: number): Observable<EmailJob> {
     return this.http.post<EmailJob>(`${this.base}/${id}/retry`, {});
   }
+
+  toggleHold(id: number): Observable<EmailJob> {
+    return this.http.post<EmailJob>(`${this.base}/${id}/toggle-hold`, {});
+  }
 }

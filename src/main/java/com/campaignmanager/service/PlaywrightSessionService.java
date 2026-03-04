@@ -10,6 +10,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,6 +50,11 @@ public class PlaywrightSessionService {
 
     private static final String SESSIONS_DIR   = "./data/sessions";
     private static final String LEGACY_SESSION = "./data/gmail-session.json";
+    private static final String OWNERS_FILE    = "./data/sessions/owners.json";
+
+    /** Maps Gmail email → app username (Spring Security principal) who uploaded it. */
+    private final Map<String, String> emailToOwner = new ConcurrentHashMap<>();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final PlaywrightSystemDepsInstaller systemDepsInstaller;
 
@@ -98,6 +106,7 @@ public class PlaywrightSessionService {
         } catch (Exception e) {
             log.warn("Playwright: initialization warning: {}", e.getMessage());
         }
+        loadOwners();
 
         // Migrate legacy single-session file to per-email layout
         Path legacy = Paths.get(LEGACY_SESSION);
@@ -165,6 +174,52 @@ public class PlaywrightSessionService {
         } catch (IOException e) {
             return null;
         }
+    }
+
+    // ─── Session Ownership ────────────────────────────────────────────────────
+
+    private void loadOwners() {
+        Path p = Paths.get(OWNERS_FILE);
+        if (!Files.exists(p)) return;
+        try {
+            Map<String, String> loaded = objectMapper.readValue(p.toFile(),
+                    new TypeReference<Map<String, String>>() {});
+            emailToOwner.putAll(loaded);
+            log.info("Loaded {} session owner entries", loaded.size());
+        } catch (Exception e) {
+            log.warn("Could not load owners.json: {}", e.getMessage());
+        }
+    }
+
+    private synchronized void saveOwners() {
+        try {
+            Files.createDirectories(Paths.get(SESSIONS_DIR));
+            objectMapper.writerWithDefaultPrettyPrinter()
+                    .writeValue(Paths.get(OWNERS_FILE).toFile(), emailToOwner);
+        } catch (Exception e) {
+            log.warn("Could not save owners.json: {}", e.getMessage());
+        }
+    }
+
+    /** Records which app user uploaded/imported a session for the given Gmail email. */
+    public void recordOwner(String gmailEmail, String username) {
+        if (gmailEmail == null || username == null) return;
+        emailToOwner.put(gmailEmail, username);
+        saveOwners();
+    }
+
+    /**
+     * Returns sessions visible to a specific app user.
+     * A session is visible if it was uploaded by that user, OR if it has no owner recorded
+     * (backward-compat: sessions uploaded before ownership tracking).
+     */
+    public List<String> listSessionsForUser(String username) {
+        return listConnectedEmails().stream()
+                .filter(email -> {
+                    String owner = emailToOwner.get(email);
+                    return owner == null || owner.equals(username);
+                })
+                .collect(Collectors.toList());
     }
 
     // ─── Async Connect ────────────────────────────────────────────────────────

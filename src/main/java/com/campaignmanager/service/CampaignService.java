@@ -112,6 +112,7 @@ public class CampaignService {
         campaign.setDescription(dto.getDescription());
         campaign.setGmailEmail(dto.getGmailEmail());
         campaign.setTanzuContact(dto.getTanzuContact());
+        campaign.setCompany(dto.getCompany());
     }
 
     public CampaignDto toDto(Campaign c) {
@@ -121,6 +122,7 @@ public class CampaignService {
         dto.setDescription(c.getDescription());
         dto.setGmailEmail(c.getGmailEmail());
         dto.setTanzuContact(c.getTanzuContact());
+        dto.setCompany(c.getCompany());
         dto.setStatus(c.getStatus());
         dto.setCreatedAt(c.getCreatedAt());
         dto.setLaunchedAt(c.getLaunchedAt());

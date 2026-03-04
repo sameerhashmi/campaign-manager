@@ -229,7 +229,11 @@ export class ContactListComponent implements OnInit {
   }
 
   deleteContact(c: Contact): void {
-    if (!confirm(`Delete contact "${c.name}"?`)) return;
+    const jobCount = c.scheduledJobCount ?? 0;
+    const jobWarning = jobCount > 0
+      ? `\n\n⚠ Warning: ${jobCount} scheduled email(s) for this contact will also be permanently deleted.`
+      : '';
+    if (!confirm(`Delete contact "${c.name}"?${jobWarning}`)) return;
     this.contactService.delete(c.id!).subscribe(() => {
       this.snackBar.open('Contact deleted', '', { duration: 3000 });
       this.load();

@@ -12,6 +12,7 @@ export interface Contact {
   emailLink?: string;
   createdAt?: string;
   enrolledInCampaign?: boolean;
+  scheduledJobCount?: number;
 }
 
 export interface CsvImportResult {

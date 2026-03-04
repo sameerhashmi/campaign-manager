@@ -4,5 +4,6 @@ public enum EmailJobStatus {
     SCHEDULED,
     SENT,
     FAILED,
-    SKIPPED
+    SKIPPED,
+    HOLD
 }

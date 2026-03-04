@@ -33,6 +33,10 @@ public class Campaign {
     @Column(name = "tanzu_contact")
     private String tanzuContact;
 
+    /** The target company for this campaign (e.g. "Citadel"). */
+    @Column(name = "company")
+    private String company;
+
     /**
      * Retained for database compatibility. Each email template now carries
      * its own {@code scheduled_at} datetime; this field is no longer used.
