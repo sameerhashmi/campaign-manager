@@ -77,7 +77,7 @@ import { EmailJobService } from '../../../services/email-job.service';
                     <div class="detail-grid">
                       <div class="detail-row">
                         <span class="label">Email Sender</span>
-                        <span>{{ campaign.gmailEmail || gmailStatus?.connectedEmail || '—' }}</span>
+                        <span>{{ campaign.gmailEmail || '—' }}</span>
                       </div>
                       @if (campaign.tanzuContact) {
                         <div class="detail-row"><span class="label">Tanzu Contact</span><span>{{ campaign.tanzuContact }}</span></div>
