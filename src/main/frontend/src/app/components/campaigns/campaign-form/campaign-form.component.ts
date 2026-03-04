@@ -358,7 +358,7 @@ export class CampaignFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
-    this.settingsService.getMySessions().subscribe({
+    this.settingsService.getSessions().subscribe({
       next: sessions => { this.connectedSessions = sessions; },
       error: () => {}
     });

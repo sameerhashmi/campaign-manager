@@ -33,11 +33,6 @@ export class SettingsService {
     return this.http.get<ConnectedSession[]>(`${this.base}/gmail/sessions`);
   }
 
-  /** Returns only the sessions owned by the currently logged-in user. */
-  getMySessions(): Observable<ConnectedSession[]> {
-    return this.http.get<ConnectedSession[]>(`${this.base}/gmail/my-sessions`);
-  }
-
   /** Triggers async browser open — returns immediately (202). Frontend polls status. */
   connectGmail(): Observable<GmailSessionStatus> {
     return this.http.post<GmailSessionStatus>(`${this.base}/gmail/connect`, null);
