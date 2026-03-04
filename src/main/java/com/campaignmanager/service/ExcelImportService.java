@@ -197,7 +197,7 @@ public class ExcelImportService {
 
         // Column index map
         int nameCol = -1, titleCol = -1, emailCol = -1, phoneCol = -1;
-        int playCol = -1, subPlayCol = -1, aeRoleCol = -1;
+        int companyCol = -1, playCol = -1, subPlayCol = -1, aeRoleCol = -1;
         int emailLinkCol = -1, optOutCol = -1;
         int[] emailDateCols = new int[]{-1, -1, -1, -1, -1, -1, -1}; // Email 1–7
 
@@ -211,6 +211,7 @@ public class ExcelImportService {
                 case "title"     -> titleCol     = col;
                 case "email"     -> emailCol     = col;
                 case "phone"     -> phoneCol     = col;
+                case "company"   -> companyCol   = col;
                 case "play"      -> playCol      = col;
                 case "sub play"  -> subPlayCol   = col;
                 case "ae/sa", "ae_sa", "ae role", "aerole" -> aeRoleCol = col;
@@ -284,6 +285,7 @@ public class ExcelImportService {
                 else if (contact.getName() == null) contact.setName(email); // fallback
                 if (titleCol    >= 0) contact.setRole(getCellString(row, titleCol));
                 if (phoneCol    >= 0) contact.setPhone(getCellString(row, phoneCol));
+                if (companyCol  >= 0) contact.setCompany(getCellString(row, companyCol));
                 if (playCol     >= 0) contact.setPlay(getCellString(row, playCol));
                 if (subPlayCol  >= 0) contact.setSubPlay(getCellString(row, subPlayCol));
                 if (aeRoleCol   >= 0) contact.setAeRole(getCellString(row, aeRoleCol));
