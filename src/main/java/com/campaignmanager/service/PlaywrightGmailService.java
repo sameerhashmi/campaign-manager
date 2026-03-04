@@ -104,51 +104,40 @@ public class PlaywrightGmailService {
         page.fill("input[name='subjectbox']", subject);
 
         // ── Step 4: Fill Body (above Gmail signature) ───────────────────────────
-        // Click the body area to focus it, then use JS to:
-        //   1. Locate the Gmail signature element (class=gmail_signature or
-        //      data-smartmail="gmail_signature").
-        //   2. Walk up from the signature to its direct child of the body div.
-        //   3. Position the cursor right before that container using Range/Selection.
-        //   4. Call execCommand('insertText') to inject the body text above the sig,
-        //      followed by two newlines so there is a blank line between body and sig.
-        // If no signature is present the cursor is placed at the very start of the
-        // body and the text is inserted there (same as before).
-        // Build an HTML version of the body with explicit black colour so Gmail's
-        // compose context (dark theme, signature colour bleed, etc.) cannot override it.
-        String htmlBody = "<div style=\"color:#000000;font-family:Arial,sans-serif;font-size:14px\">"
-                + body.replace("&", "&amp;")
-                      .replace("<", "&lt;")
-                      .replace(">", "&gt;")
-                      .replace("\n", "<br>")
-                + "</div>";
-
+        // Uses direct DOM manipulation (no execCommand) to avoid Chrome's Trusted Types
+        // policy which blocks execCommand('insertHTML', false, plainString).
+        // Builds a styled wrapper div from text nodes + <br> elements so the font
+        // colour is explicitly black regardless of Gmail's compose theme.
         page.click("div[aria-label='Message Body']");
         page.waitForTimeout(300);
         page.evaluate(
-            "(html) => {" +
+            "(text) => {" +
             "  const body = document.querySelector('div[aria-label=\"Message Body\"]');" +
             "  if (!body) return;" +
             "  body.focus();" +
+            "  const wrapper = document.createElement('div');" +
+            "  wrapper.style.color = '#000000';" +
+            "  wrapper.style.fontFamily = 'Arial,sans-serif';" +
+            "  wrapper.style.fontSize = '14px';" +
+            "  const lines = text.split('\\n');" +
+            "  lines.forEach((line, i) => {" +
+            "    if (line) wrapper.appendChild(document.createTextNode(line));" +
+            "    if (i < lines.length - 1) wrapper.appendChild(document.createElement('br'));" +
+            "  });" +
             "  const sig = body.querySelector('.gmail_signature, [data-smartmail=\"gmail_signature\"]');" +
-            "  const sel = window.getSelection();" +
-            "  const range = document.createRange();" +
             "  if (sig) {" +
             "    let sigTop = sig;" +
             "    while (sigTop.parentElement && sigTop.parentElement !== body) sigTop = sigTop.parentElement;" +
-            "    range.setStartBefore(sigTop);" +
-            "    range.collapse(true);" +
-            "    sel.removeAllRanges();" +
-            "    sel.addRange(range);" +
-            "    document.execCommand('insertHTML', false, html + '<br><br>');" +
+            "    const frag = document.createDocumentFragment();" +
+            "    frag.appendChild(wrapper);" +
+            "    frag.appendChild(document.createElement('br'));" +
+            "    frag.appendChild(document.createElement('br'));" +
+            "    body.insertBefore(frag, sigTop);" +
             "  } else {" +
-            "    range.setStart(body, 0);" +
-            "    range.collapse(true);" +
-            "    sel.removeAllRanges();" +
-            "    sel.addRange(range);" +
-            "    document.execCommand('insertHTML', false, html);" +
+            "    body.insertBefore(wrapper, body.firstChild);" +
             "  }" +
             "}",
-            htmlBody);
+            body);
 
         // ── Step 5: Send ─────────────────────────────────────────────────────────
         // Primary: click Gmail's Send button (.aoO is the compose Send button class).
