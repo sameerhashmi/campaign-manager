@@ -124,7 +124,7 @@ import { switchMap, takeWhile } from 'rxjs/operators';
             <div class="cloud-notice">
               <mat-icon class="cloud-notice-icon">cloud</mat-icon>
               <span>Running in a cloud / headless environment — browser login is not available.
-                Use <strong>Upload Session File</strong> or <strong>Connect via Gmail Cookies</strong> below.</span>
+                Use <strong>Upload Session File</strong> below.</span>
             </div>
           }
 
@@ -176,76 +176,6 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           </mat-card-content>
         </mat-card>
 
-        <!-- Paste Session JSON -->
-        <mat-card class="info-card" style="margin-top:24px">
-          <mat-card-header>
-            <div mat-card-avatar class="paste-avatar">
-              <mat-icon>content_paste</mat-icon>
-            </div>
-            <mat-card-title>Paste Session JSON</mat-card-title>
-            <mat-card-subtitle>
-              Paste the contents of a <code>gmail-session.json</code> Playwright storageState file directly.
-            </mat-card-subtitle>
-          </mat-card-header>
-          <mat-card-content>
-            <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
-              <mat-label>Paste gmail-session.json contents</mat-label>
-              <textarea matInput [(ngModel)]="pastedJson" rows="6"
-                        placeholder='{"cookies":[...],"origins":[]}'></textarea>
-            </mat-form-field>
-          </mat-card-content>
-          <mat-divider></mat-divider>
-          <mat-card-actions>
-            <button mat-raised-button color="primary"
-                    [disabled]="!pastedJson.trim() || uploading"
-                    (click)="savePastedJson()">
-              <mat-icon>save</mat-icon>
-              {{ uploading ? 'Saving…' : 'Save Session' }}
-            </button>
-          </mat-card-actions>
-        </mat-card>
-
-        <!-- Cookie Editor (no install required) -->
-        <mat-card class="info-card" style="margin-top:24px">
-          <mat-card-header>
-            <div mat-card-avatar class="cookie-avatar">
-              <mat-icon>cookie</mat-icon>
-            </div>
-            <mat-card-title>Connect via Gmail Cookies</mat-card-title>
-            <mat-card-subtitle>
-              No Java, no Node — works from any browser. Takes about 2 minutes.
-            </mat-card-subtitle>
-          </mat-card-header>
-          <mat-card-content>
-            <ol class="steps-list">
-              <li>
-                Install the free
-                <a href="https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalyna"
-                   target="_blank" rel="noopener" class="ext-link">
-                  Cookie Editor Chrome extension
-                </a>
-              </li>
-              <li>Log into <strong>Gmail</strong> in your browser (make sure the inbox is visible)</li>
-              <li>Click the Cookie Editor icon in your toolbar → <strong>Export → Export All</strong></li>
-              <li>Paste the copied JSON below and click <strong>Connect with Cookies</strong></li>
-            </ol>
-            <mat-form-field appearance="outline" style="width:100%;margin-top:8px">
-              <mat-label>Paste Cookie Editor export here</mat-label>
-              <textarea matInput [(ngModel)]="cookieJson" rows="6"
-                        placeholder='[{"domain":".google.com","name":"SID","value":"..."}]'></textarea>
-              <mat-hint>Paste the JSON array copied from Cookie Editor → Export All</mat-hint>
-            </mat-form-field>
-          </mat-card-content>
-          <mat-divider></mat-divider>
-          <mat-card-actions>
-            <button mat-raised-button color="primary"
-                    [disabled]="!cookieJson.trim() || uploading"
-                    (click)="saveCookieJson()">
-              <mat-icon>vpn_key</mat-icon>
-              {{ uploading ? 'Connecting…' : 'Connect with Cookies' }}
-            </button>
-          </mat-card-actions>
-        </mat-card>
 
       </div>
     </app-nav>
