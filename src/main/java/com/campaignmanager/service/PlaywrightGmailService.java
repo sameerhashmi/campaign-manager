@@ -28,10 +28,25 @@ public class PlaywrightGmailService {
         String toEmail     = job.getCampaignContact().getContact().getEmail();
         String senderEmail = job.getCampaignContact().getCampaign().getGmailEmail();
 
-        // Route to the campaign-specific session; fall back to first available
-        BrowserContext context = (senderEmail != null && !senderEmail.isBlank())
-                ? sessionService.getSessionContext(senderEmail)
-                : sessionService.getSessionContext();
+        // Route to the campaign-specific session.
+        // If no account is assigned: allow fallback only when exactly 1 session exists
+        // (backward compat for campaigns created before multi-session support).
+        // With 2+ sessions and no assignment, fail clearly rather than silently
+        // sending from the wrong account.
+        BrowserContext context;
+        if (senderEmail != null && !senderEmail.isBlank()) {
+            context = sessionService.getSessionContext(senderEmail);
+        } else {
+            java.util.List<String> available = sessionService.listConnectedEmails();
+            if (available.size() == 1) {
+                context = sessionService.getSessionContext(available.get(0));
+            } else if (available.isEmpty()) {
+                throw new Exception("No Gmail session connected. Go to Settings → Gmail Sessions and upload a session file.");
+            } else {
+                throw new Exception("This campaign has no Gmail account assigned. " +
+                        "Edit the campaign and set 'Send From' to a specific Gmail account before sending.");
+            }
+        }
 
         Page page = context.newPage();
 

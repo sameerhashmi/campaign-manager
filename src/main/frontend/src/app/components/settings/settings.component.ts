@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -87,8 +87,15 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                   </ng-container>
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef></th>
-                    <td mat-cell *matCellDef="let s">
-                      <button mat-stroked-button color="warn" (click)="disconnectOne(s.email)"
+                    <td mat-cell *matCellDef="let s" style="white-space:nowrap">
+                      <button mat-stroked-button (click)="refreshSession(s.email)"
+                              [disabled]="uploading"
+                              matTooltip="Upload a new session file for this account — no need to disconnect first"
+                              style="margin-right:6px">
+                        <mat-icon>sync</mat-icon> Refresh
+                      </button>
+                      <button mat-stroked-button color="warn"
+                              (click)="disconnectOne(s.email, s.campaignCount)"
                               matTooltip="Remove this Gmail session">
                         <mat-icon>link_off</mat-icon> Disconnect
                       </button>
@@ -126,6 +133,8 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           <mat-card-actions>
             <input #fileInput type="file" accept=".json" style="display:none"
                    (change)="onFileSelected($event)">
+            <input #refreshInput type="file" accept=".json" style="display:none"
+                   (change)="onRefreshFileSelected($event)">
 
             @if (!status?.connecting) {
               @if (!status?.cloudEnvironment) {
@@ -299,12 +308,15 @@ import { switchMap, takeWhile } from 'rxjs/operators';
   `]
 })
 export class SettingsComponent implements OnInit, OnDestroy {
+  @ViewChild('refreshInput') refreshInputEl!: ElementRef<HTMLInputElement>;
+
   status: GmailSessionStatus | null = null;
   sessions: ConnectedSession[] = [];
   loading = true;
   uploading = false;
   pastedJson = '';
   cookieJson = '';
+  refreshTargetEmail = '';
   private pollSub?: Subscription;
 
   constructor(
@@ -443,8 +455,47 @@ export class SettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  disconnectOne(email: string): void {
-    if (!confirm(`Disconnect ${email}? Campaigns assigned to this account will fail to send.`)) return;
+  refreshSession(email: string): void {
+    this.refreshTargetEmail = email;
+    this.refreshInputEl.nativeElement.value = '';
+    this.refreshInputEl.nativeElement.click();
+  }
+
+  onRefreshFileSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this.uploading = true;
+    this.snackBar.open(
+      `Refreshing session for ${this.refreshTargetEmail} — this may take 10–20 seconds…`,
+      '', { duration: 30000 }
+    );
+    this.settingsService.uploadSession(file).subscribe({
+      next: s => {
+        this.status = s;
+        this.sessions = s.sessions ?? [];
+        this.uploading = false;
+        this.snackBar.dismiss();
+        this.snackBar.open(s.message || `Session refreshed for ${this.refreshTargetEmail}!`, '', {
+          duration: 5000, panelClass: 'snack-success'
+        });
+        this.refreshTargetEmail = '';
+      },
+      error: (err) => {
+        this.uploading = false;
+        this.snackBar.dismiss();
+        const msg = err?.error?.message ?? 'Refresh failed.';
+        this.snackBar.open(msg, 'Close', { duration: 8000, panelClass: 'snack-error' });
+        this.refreshTargetEmail = '';
+      }
+    });
+    (event.target as HTMLInputElement).value = '';
+  }
+
+  disconnectOne(email: string, campaignCount: number): void {
+    const warning = campaignCount > 0
+      ? `\n\nWarning: ${campaignCount} campaign(s) use this account. Their scheduled emails will fail until you reconnect.\n\nTip: Use "Refresh" to replace the session without any downtime.`
+      : '';
+    if (!confirm(`Disconnect Gmail session for ${email}?${warning}`)) return;
     this.settingsService.disconnectSession(email).subscribe({
       next: s => {
         this.status = s;
