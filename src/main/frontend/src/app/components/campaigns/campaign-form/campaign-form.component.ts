@@ -351,13 +351,7 @@ export class CampaignFormComponent implements OnInit {
   ngOnInit(): void {
     this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
     this.settingsService.getSessions().subscribe({
-      next: sessions => {
-        this.connectedSessions = sessions;
-        const id = this.route.snapshot.paramMap.get('id');
-        if ((!id || id === 'new') && sessions.length > 0 && !this.form.get('gmailEmail')?.value) {
-          this.form.patchValue({ gmailEmail: sessions[0].email });
-        }
-      },
+      next: sessions => { this.connectedSessions = sessions; },
       error: () => {}
     });
     const id = this.route.snapshot.paramMap.get('id');

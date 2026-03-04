@@ -49,6 +49,9 @@ import { EmailJobService } from '../../../services/email-job.service';
               </div>
             </div>
             <div class="header-actions">
+              <button mat-stroked-button [routerLink]="['/campaigns', campaign.id, 'edit']">
+                <mat-icon>edit</mat-icon> Edit
+              </button>
               @if (campaign.status === 'DRAFT' || campaign.status === 'PAUSED') {
                 <button mat-raised-button color="primary" (click)="launch()">
                   <mat-icon>rocket_launch</mat-icon> Launch

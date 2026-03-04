@@ -27,6 +27,12 @@ export const routes: Routes = [
       import('./components/campaigns/campaign-form/campaign-form.component').then(m => m.CampaignFormComponent)
   },
   {
+    path: 'campaigns/:id/edit',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/campaigns/campaign-form/campaign-form.component').then(m => m.CampaignFormComponent)
+  },
+  {
     path: 'campaigns/:id',
     canActivate: [authGuard],
     loadComponent: () =>
