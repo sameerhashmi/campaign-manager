@@ -2,6 +2,7 @@
 applications:
 - name: sh-campaign-manager
   memory: 2G
+  instances: 1
   random-route: true
   path: dist/campaign-manager-1.0.0.jar
   services:
