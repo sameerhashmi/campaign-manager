@@ -66,10 +66,6 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
                     <mat-label>Company</mat-label>
                     <input matInput formControlName="company">
                   </mat-form-field>
-                  <mat-form-field appearance="outline">
-                    <mat-label>Category</mat-label>
-                    <input matInput formControlName="category" placeholder="Enterprise, SMB...">
-                  </mat-form-field>
                 </div>
                 <div class="form-actions">
                   <button mat-button type="button" (click)="closeForm()">Cancel</button>
@@ -103,10 +99,6 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
                 <ng-container matColumnDef="company">
                   <th mat-header-cell *matHeaderCellDef>Company</th>
                   <td mat-cell *matCellDef="let c">{{ c.company }}</td>
-                </ng-container>
-                <ng-container matColumnDef="category">
-                  <th mat-header-cell *matHeaderCellDef>Category</th>
-                  <td mat-cell *matCellDef="let c">{{ c.category }}</td>
                 </ng-container>
                 <ng-container matColumnDef="actions">
                   <th mat-header-cell *matHeaderCellDef></th>
@@ -158,7 +150,7 @@ export class ContactListComponent implements OnInit {
   showForm = false;
   editingContact: Contact | null = null;
 
-  displayedColumns = ['name', 'email', 'role', 'company', 'category', 'actions'];
+  displayedColumns = ['name', 'email', 'role', 'company', 'actions'];
   contactForm: FormGroup;
   searchControl;
   private searchSubject = new Subject<string>();
@@ -172,8 +164,7 @@ export class ContactListComponent implements OnInit {
       name: ['', Validators.required],
       email: ['', [Validators.required, Validators.email]],
       role: [''],
-      company: [''],
-      category: ['']
+      company: ['']
     });
     this.searchControl = this.fb.control('');
   }
