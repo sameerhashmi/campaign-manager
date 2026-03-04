@@ -60,6 +60,7 @@ import { SettingsService, GmailSessionStatus, ConnectedSession } from '../../../
                 <mat-form-field appearance="outline">
                   <mat-label>Send From (Gmail Account)</mat-label>
                   <mat-select formControlName="gmailEmail">
+                    <mat-option [value]="''">— Not assigned —</mat-option>
                     @for (s of connectedSessions; track s.email) {
                       <mat-option [value]="s.email">{{ s.email }}</mat-option>
                     }
