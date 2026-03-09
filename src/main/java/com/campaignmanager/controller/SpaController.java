@@ -19,7 +19,8 @@ public class SpaController {
         "/campaigns/**",
         "/contacts",
         "/contacts/**",
-        "/settings"
+        "/settings",
+        "/client-briefings"
     })
     public String index() {
         return "forward:/index.html";

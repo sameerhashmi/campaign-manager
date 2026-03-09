@@ -50,5 +50,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./components/settings/settings.component').then(m => m.SettingsComponent)
   },
+  {
+    path: 'client-briefings',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/client-briefings/client-briefing-list.component').then(m => m.ClientBriefingListComponent)
+  },
   { path: '**', redirectTo: '/dashboard' }
 ];
