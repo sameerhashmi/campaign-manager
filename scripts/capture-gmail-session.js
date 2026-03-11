@@ -33,21 +33,53 @@ const path = require('path');
 
   await page.goto('https://mail.google.com');
 
-  // Wait until the user reaches the Gmail inbox (URL contains /mail/u/)
   console.log('Waiting for Gmail inbox (sign in and complete any 2-step verification)...');
-  await page.waitForURL('**/mail/u/**', { timeout: 300_000 }); // 5-minute timeout
+  console.log('The session will be captured automatically once you reach your inbox.\n');
 
-  // Give the page a moment to fully settle
-  await page.waitForTimeout(2000);
+  // Poll every 2 seconds until we see a Gmail inbox indicator.
+  // Checks the URL (mail/u/ pattern) AND the presence of the compose button
+  // so we handle redirects, account pickers, and slow page loads.
+  const TIMEOUT_MS = 300_000; // 5 minutes
+  const POLL_MS    = 2_000;
+  const deadline   = Date.now() + TIMEOUT_MS;
+  let captured     = false;
 
-  const storageState = await context.storageState();
-  fs.writeFileSync(outputFile, JSON.stringify(storageState, null, 2));
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(POLL_MS);
+
+    const url = page.url();
+    const onGmail = url.includes('mail.google.com') &&
+                    (url.includes('/mail/u/') || url.includes('/mail/r/'));
+
+    let hasInbox = false;
+    if (onGmail) {
+      // Look for the compose button or the inbox label — reliable signals the inbox loaded
+      hasInbox = await page.locator('[gh="cm"], [data-tooltip="Compose"], div[role="navigation"]')
+                           .first()
+                           .isVisible({ timeout: 1000 })
+                           .catch(() => false);
+    }
+
+    if (onGmail && hasInbox) {
+      // Give the page a moment to settle all cookies
+      await page.waitForTimeout(2000);
+      const storageState = await context.storageState();
+      fs.writeFileSync(outputFile, JSON.stringify(storageState, null, 2));
+      captured = true;
+      break;
+    }
+  }
 
   await browser.close();
 
-  console.log('\nSession saved to: ' + outputFile);
-  console.log('\nNext step:');
-  console.log('  Go to your cloud app → Settings → Upload Session File');
-  console.log('  and upload: ' + outputFile);
-  console.log('  OR paste the JSON contents into the "Paste Session JSON" box.\n');
+  if (captured) {
+    console.log('\nSession saved to: ' + outputFile);
+    console.log('\nNext step:');
+    console.log('  Go to your cloud app → Settings → Upload Session File');
+    console.log('  and upload: ' + outputFile + '\n');
+  } else {
+    console.error('\nTimed out waiting for Gmail inbox. Please try again.');
+    console.error('Make sure you fully log in and reach your inbox before the 5-minute limit.\n');
+    process.exit(1);
+  }
 })();
