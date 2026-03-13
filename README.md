@@ -9,6 +9,7 @@
 
 | | Feature |
 |---|---|
+| 👥 | Multi-user — anyone can register; each user sees only their own campaigns and contacts |
 | 📊 | Sortable, filterable Dashboard with campaign and email job stats |
 | 📅 | Per-contact 7-email schedules with individual send dates from the spreadsheet |
 | 📄 | Personalized email bodies fetched from private **Google Docs** at import time |
@@ -35,7 +36,31 @@ mvn package -DskipTests
 java -jar target/campaign-manager-1.0.0.jar
 ```
 
-Open **http://localhost:8080** — login: `admin` / `admin123`
+Open **http://localhost:8080** — create an account on the login page or sign in with the admin account.
+
+---
+
+## 👥 User Accounts
+
+Registration is open — anyone can create an account directly from the login page. No invite required.
+
+- **Username** must be a valid email address (this becomes your Gmail send-from identity)
+- **Password** minimum 6 characters
+
+### Roles
+
+| Role | Access |
+|------|--------|
+| **User** | Sees and manages only their own campaigns, contacts, and Gmail session |
+| **Admin** | Sees everything across all users; can manage any session |
+
+### Gmail session scoping
+
+Each user's Gmail session is tied to their login email. When you upload a session file, the app verifies that the detected Gmail address matches your account — mismatched sessions are rejected. This ensures each user can only send from their own Gmail.
+
+### Admin account
+
+An `admin` account is created automatically on first startup. Contact your administrator for the credentials. Admin can see all users' campaigns and contacts (with an Owner column in the list views).
 
 ---
 
@@ -212,6 +237,7 @@ Without a bound database, H2 is used and data is lost on every restart.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `POST` | `/api/auth/register` | Create account (email + password) |
 | `POST` | `/api/auth/login` | Get JWT token |
 | `GET` | `/api/campaigns` | List campaigns |
 | `POST` | `/api/campaigns` | Create campaign |
