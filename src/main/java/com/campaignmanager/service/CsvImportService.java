@@ -2,6 +2,8 @@ package com.campaignmanager.service;
 
 import com.campaignmanager.dto.ContactDto;
 import com.campaignmanager.dto.CsvImportResultDto;
+import com.campaignmanager.model.User;
+import com.campaignmanager.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.csv.CSVFormat;
@@ -9,6 +11,7 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,16 +26,24 @@ import java.util.List;
 public class CsvImportService {
 
     private final ContactService contactService;
+    private final UserRepository userRepository;
 
-    public CsvImportResultDto importContacts(MultipartFile file) {
+    public CsvImportResultDto importContacts(MultipartFile file, Authentication auth) {
+        User owner = null;
+        if (auth != null) {
+            boolean admin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            if (!admin) {
+                owner = userRepository.findByUsername(auth.getName()).orElse(null);
+            }
+        }
         String filename = file.getOriginalFilename();
         if (filename != null && (filename.endsWith(".xlsx") || filename.endsWith(".xls"))) {
-            return importFromExcel(file);
+            return importFromExcel(file, owner);
         }
-        return importFromCsv(file);
+        return importFromCsv(file, owner);
     }
 
-    private CsvImportResultDto importFromCsv(MultipartFile file) {
+    private CsvImportResultDto importFromCsv(MultipartFile file, User owner) {
         int imported = 0, updated = 0, failed = 0;
         List<String> errors = new ArrayList<>();
 
@@ -46,9 +57,9 @@ public class CsvImportService {
             for (CSVRecord record : parser) {
                 try {
                     ContactDto dto = recordToDto(record);
-                    boolean existed = contactService.findAll(dto.getEmail()).stream()
+                    boolean existed = contactService.findAll(dto.getEmail(), null).stream()
                             .anyMatch(c -> c.getEmail().equalsIgnoreCase(dto.getEmail()));
-                    contactService.upsertByEmail(dto);
+                    contactService.upsertByEmail(dto, owner);
                     if (existed) updated++; else imported++;
                 } catch (Exception e) {
                     failed++;
@@ -62,7 +73,7 @@ public class CsvImportService {
         return new CsvImportResultDto(imported, updated, failed, errors);
     }
 
-    private CsvImportResultDto importFromExcel(MultipartFile file) {
+    private CsvImportResultDto importFromExcel(MultipartFile file, User owner) {
         int imported = 0, updated = 0, failed = 0;
         List<String> errors = new ArrayList<>();
 
@@ -75,9 +86,9 @@ public class CsvImportService {
                 if (row == null) continue;
                 try {
                     ContactDto dto = rowToDto(row, headerRow);
-                    boolean existed = contactService.findAll(dto.getEmail()).stream()
+                    boolean existed = contactService.findAll(dto.getEmail(), null).stream()
                             .anyMatch(c -> c.getEmail().equalsIgnoreCase(dto.getEmail()));
-                    contactService.upsertByEmail(dto);
+                    contactService.upsertByEmail(dto, owner);
                     if (existed) updated++; else imported++;
                 } catch (Exception e) {
                     failed++;

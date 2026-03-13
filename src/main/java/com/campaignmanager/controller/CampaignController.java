@@ -15,6 +15,7 @@ import com.campaignmanager.service.ExcelImportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,67 +40,74 @@ public class CampaignController {
     private final ContactRepository contactRepository;
 
     @GetMapping
-    public List<CampaignDto> getAll() {
-        return campaignService.findAll();
+    public List<CampaignDto> getAll(Authentication auth) {
+        return campaignService.findAll(auth);
     }
 
     @GetMapping("/{id}")
-    public CampaignDto getById(@PathVariable Long id) {
-        return campaignService.findById(id);
+    public CampaignDto getById(@PathVariable Long id, Authentication auth) {
+        return campaignService.findById(id, auth);
     }
 
     @PostMapping
-    public CampaignDto create(@Valid @RequestBody CampaignDto dto) {
-        return campaignService.create(dto);
+    public CampaignDto create(@Valid @RequestBody CampaignDto dto, Authentication auth) {
+        return campaignService.create(dto, auth);
     }
 
     @PutMapping("/{id}")
-    public CampaignDto update(@PathVariable Long id, @Valid @RequestBody CampaignDto dto) {
-        return campaignService.update(id, dto);
+    public CampaignDto update(@PathVariable Long id, @Valid @RequestBody CampaignDto dto, Authentication auth) {
+        return campaignService.update(id, dto, auth);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        campaignService.delete(id);
+    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication auth) {
+        campaignService.delete(id, auth);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/launch")
-    public CampaignDto launch(@PathVariable Long id) {
-        return campaignService.launch(id);
+    public CampaignDto launch(@PathVariable Long id, Authentication auth) {
+        return campaignService.launch(id, auth);
     }
 
     @PostMapping("/{id}/pause")
-    public CampaignDto pause(@PathVariable Long id) {
-        return campaignService.pause(id);
+    public CampaignDto pause(@PathVariable Long id, Authentication auth) {
+        return campaignService.pause(id, auth);
     }
 
     @PostMapping("/{id}/resume")
-    public CampaignDto resume(@PathVariable Long id) {
-        return campaignService.resume(id);
+    public CampaignDto resume(@PathVariable Long id, Authentication auth) {
+        return campaignService.resume(id, auth);
     }
 
     // --- Templates ---
 
     @GetMapping("/{id}/templates")
-    public List<EmailTemplateDto> getTemplates(@PathVariable Long id) {
+    public List<EmailTemplateDto> getTemplates(@PathVariable Long id, Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         return templateService.findByCampaign(id);
     }
 
     @PostMapping("/{id}/templates")
-    public EmailTemplateDto addTemplate(@PathVariable Long id, @Valid @RequestBody EmailTemplateDto dto) {
+    public EmailTemplateDto addTemplate(@PathVariable Long id, @Valid @RequestBody EmailTemplateDto dto,
+                                        Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         return templateService.create(id, dto);
     }
 
     @PutMapping("/{id}/templates/{templateId}")
     public EmailTemplateDto updateTemplate(@PathVariable Long id,
                                            @PathVariable Long templateId,
-                                           @Valid @RequestBody EmailTemplateDto dto) {
+                                           @Valid @RequestBody EmailTemplateDto dto,
+                                           Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         return templateService.update(templateId, dto);
     }
 
     @DeleteMapping("/{id}/templates/{templateId}")
-    public ResponseEntity<Void> deleteTemplate(@PathVariable Long id, @PathVariable Long templateId) {
+    public ResponseEntity<Void> deleteTemplate(@PathVariable Long id, @PathVariable Long templateId,
+                                               Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         templateService.delete(templateId);
         return ResponseEntity.noContent().build();
     }
@@ -107,7 +115,8 @@ public class CampaignController {
     // --- Contacts ---
 
     @GetMapping("/{id}/contacts")
-    public List<ContactDto> getContacts(@PathVariable Long id) {
+    public List<ContactDto> getContacts(@PathVariable Long id, Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         return campaignContactRepository.findByCampaignId(id).stream()
                 .map(cc -> {
                     ContactDto dto = contactService.toDto(cc.getContact());
@@ -120,7 +129,9 @@ public class CampaignController {
     @PostMapping("/{id}/contacts")
     @Transactional
     public ResponseEntity<Map<String, Object>> assignContacts(@PathVariable Long id,
-                                                              @RequestBody BulkContactAssignDto body) {
+                                                              @RequestBody BulkContactAssignDto body,
+                                                              Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
 
@@ -143,7 +154,9 @@ public class CampaignController {
 
     @DeleteMapping("/{id}/contacts/{contactId}")
     @Transactional
-    public ResponseEntity<Void> removeContact(@PathVariable Long id, @PathVariable Long contactId) {
+    public ResponseEntity<Void> removeContact(@PathVariable Long id, @PathVariable Long contactId,
+                                              Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         campaignContactRepository.findByCampaignIdAndContactId(id, contactId)
                 .ifPresent(campaignContactRepository::delete);
         return ResponseEntity.noContent().build();
@@ -159,7 +172,9 @@ public class CampaignController {
     @PostMapping("/{id}/import-excel")
     public ResponseEntity<ExcelImportResultDto> importExcel(@PathVariable Long id,
                                                             @RequestParam("file") MultipartFile file,
-                                                            @RequestParam(defaultValue = "false") boolean replace) {
+                                                            @RequestParam(defaultValue = "false") boolean replace,
+                                                            Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         try {
             ExcelImportResultDto result = excelImportService.importFromExcel(id, file, replace);
             return ResponseEntity.ok(result);
@@ -176,7 +191,9 @@ public class CampaignController {
     @PostMapping("/{id}/import-gsheet")
     public ResponseEntity<ExcelImportResultDto> importGoogleSheet(@PathVariable Long id,
                                                                    @RequestParam String url,
-                                                                   @RequestParam(defaultValue = "false") boolean replace) {
+                                                                   @RequestParam(defaultValue = "false") boolean replace,
+                                                                   Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         try {
             ExcelImportResultDto result = excelImportService.importFromGoogleSheet(id, url, replace);
             return ResponseEntity.ok(result);
@@ -192,7 +209,9 @@ public class CampaignController {
 
     @GetMapping("/{id}/jobs")
     public List<EmailJobDto> getJobs(@PathVariable Long id,
-                                     @RequestParam(required = false) String status) {
+                                     @RequestParam(required = false) String status,
+                                     Authentication auth) {
+        campaignService.checkCampaignAccess(id, auth);
         return emailJobService.findByCampaign(id, status);
     }
 }

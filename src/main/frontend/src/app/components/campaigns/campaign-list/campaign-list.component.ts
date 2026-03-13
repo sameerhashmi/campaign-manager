@@ -17,6 +17,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { CampaignService } from '../../../services/campaign.service';
 import { SettingsService, GmailSessionStatus } from '../../../services/settings.service';
+import { AuthService } from '../../../services/auth.service';
 import { Campaign } from '../../../models/campaign.model';
 
 @Component({
@@ -77,6 +78,11 @@ import { Campaign } from '../../../models/campaign.model';
                   <td mat-cell *matCellDef="let c">
                     <span class="status-chip {{ c.status?.toLowerCase() }}">{{ c.status }}</span>
                   </td>
+                </ng-container>
+
+                <ng-container matColumnDef="owner">
+                  <th mat-header-cell *matHeaderCellDef mat-sort-header>Owner</th>
+                  <td mat-cell *matCellDef="let c">{{ c.ownerUsername || '—' }}</td>
                 </ng-container>
 
                 <ng-container matColumnDef="createdAt">
@@ -164,6 +170,7 @@ export class CampaignListComponent implements OnInit {
   gmailStatus: GmailSessionStatus | null = null;
   loading = true;
   filterValue = '';
+  isAdmin = false;
   displayedColumns = ['name', 'gmailEmail', 'contacts', 'status', 'createdAt', 'actions'];
 
   @ViewChild('campaignsSort') set sortSetter(s: MatSort) {
@@ -182,11 +189,16 @@ export class CampaignListComponent implements OnInit {
   constructor(
     private campaignService: CampaignService,
     private settingsService: SettingsService,
+    private authService: AuthService,
     private snackBar: MatSnackBar,
     private router: Router
   ) {}
 
   ngOnInit(): void {
+    this.isAdmin = this.authService.isAdmin();
+    if (this.isAdmin) {
+      this.displayedColumns = ['name', 'owner', 'gmailEmail', 'contacts', 'status', 'createdAt', 'actions'];
+    }
     this.settingsService.getStatus().subscribe({ next: s => this.gmailStatus = s, error: () => {} });
     this.load();
   }

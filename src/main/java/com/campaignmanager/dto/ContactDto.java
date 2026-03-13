@@ -28,4 +28,5 @@ public class ContactDto {
     private LocalDateTime createdAt;
     private boolean enrolledInCampaign;
     private int scheduledJobCount;
+    private String ownerUsername;
 }

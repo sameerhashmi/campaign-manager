@@ -6,8 +6,11 @@ import com.campaignmanager.model.*;
 import com.campaignmanager.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,16 +26,38 @@ public class CampaignService {
     private final CampaignContactRepository campaignContactRepository;
     private final EmailJobRepository emailJobRepository;
     private final ContactRepository contactRepository;
+    private final UserRepository userRepository;
 
-    public List<CampaignDto> findAll() {
-        return campaignRepository.findAll().stream()
-                .map(this::toDto)
-                .collect(Collectors.toList());
+    private boolean isAdmin(Authentication auth) {
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
-    public CampaignDto findById(Long id) {
+    private User resolveOwner(Authentication auth) {
+        return userRepository.findByUsername(auth.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    }
+
+    private void checkAccess(Campaign campaign, Authentication auth) {
+        if (isAdmin(auth)) return;
+        User owner = campaign.getOwner();
+        if (owner == null || !owner.getUsername().equals(auth.getName())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+    }
+
+    public List<CampaignDto> findAll(Authentication auth) {
+        if (isAdmin(auth)) {
+            return campaignRepository.findAll().stream().map(this::toDto).collect(Collectors.toList());
+        }
+        User owner = resolveOwner(auth);
+        return campaignRepository.findAllByOwner(owner).stream().map(this::toDto).collect(Collectors.toList());
+    }
+
+    public CampaignDto findById(Long id, Authentication auth) {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
+        checkAccess(campaign, auth);
         CampaignDto dto = toDto(campaign);
         dto.setTemplates(templateRepository.findByCampaignIdOrderByStepNumber(id)
                 .stream().map(this::templateToDto).collect(Collectors.toList()));
@@ -40,31 +65,39 @@ public class CampaignService {
     }
 
     @Transactional
-    public CampaignDto create(CampaignDto dto) {
+    public CampaignDto create(CampaignDto dto, Authentication auth) {
         Campaign campaign = new Campaign();
         mapDtoToEntity(dto, campaign);
         campaign.setStatus(CampaignStatus.DRAFT);
         campaign.setCreatedAt(LocalDateTime.now());
+        if (!isAdmin(auth)) {
+            campaign.setOwner(resolveOwner(auth));
+        }
         return toDto(campaignRepository.save(campaign));
     }
 
     @Transactional
-    public CampaignDto update(Long id, CampaignDto dto) {
+    public CampaignDto update(Long id, CampaignDto dto, Authentication auth) {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
+        checkAccess(campaign, auth);
         mapDtoToEntity(dto, campaign);
         return toDto(campaignRepository.save(campaign));
     }
 
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, Authentication auth) {
+        Campaign campaign = campaignRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
+        checkAccess(campaign, auth);
         campaignRepository.deleteById(id);
     }
 
     @Transactional
-    public CampaignDto launch(Long id) {
+    public CampaignDto launch(Long id, Authentication auth) {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
+        checkAccess(campaign, auth);
 
         if (campaign.getStatus() == CampaignStatus.COMPLETED) {
             throw new RuntimeException("Campaign is already completed");
@@ -84,19 +117,28 @@ public class CampaignService {
     }
 
     @Transactional
-    public CampaignDto pause(Long id) {
+    public CampaignDto pause(Long id, Authentication auth) {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
+        checkAccess(campaign, auth);
         campaign.setStatus(CampaignStatus.PAUSED);
         return toDto(campaignRepository.save(campaign));
     }
 
     @Transactional
-    public CampaignDto resume(Long id) {
+    public CampaignDto resume(Long id, Authentication auth) {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
+        checkAccess(campaign, auth);
         campaign.setStatus(CampaignStatus.ACTIVE);
         return toDto(campaignRepository.save(campaign));
+    }
+
+    /** Verify the campaign belongs to the authenticated user (or user is admin). */
+    public void checkCampaignAccess(Long campaignId, Authentication auth) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
+        checkAccess(campaign, auth);
     }
 
     private String resolveTokens(String template, Contact contact) {
@@ -127,6 +169,7 @@ public class CampaignService {
         dto.setCreatedAt(c.getCreatedAt());
         dto.setLaunchedAt(c.getLaunchedAt());
         dto.setContactCount(campaignContactRepository.countByCampaignId(c.getId() != null ? c.getId() : 0L));
+        if (c.getOwner() != null) dto.setOwnerUsername(c.getOwner().getUsername());
         return dto;
     }
 

@@ -31,6 +31,7 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Default admin user created — username: admin, password: admin123");
         }
         migrateEmailJobStatusColumn();
+        migrateOwnerColumns();
     }
 
     /**
@@ -64,6 +65,65 @@ public class DataInitializer implements CommandLineRunner {
             log.info("email_jobs.status ensured as VARCHAR(20)");
         } catch (Exception e) {
             log.debug("email_jobs.status column alter skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Sets owner_id on existing campaigns/contacts to the admin user,
+     * and migrates the contacts email unique constraint to a composite (email, owner_id).
+     * Safe to run repeatedly — all steps are idempotent or wrapped in try/catch.
+     */
+    private void migrateOwnerColumns() {
+        Long adminId = userRepository.findByUsername("admin")
+                .map(u -> u.getId())
+                .orElse(null);
+        if (adminId == null) {
+            log.warn("migrateOwnerColumns: admin user not found, skipping");
+            return;
+        }
+
+        // Set owner_id on existing campaigns that have none
+        try {
+            int updated = jdbcTemplate.update(
+                "UPDATE campaigns SET owner_id = ? WHERE owner_id IS NULL", adminId);
+            if (updated > 0) log.info("Set owner_id={} on {} existing campaigns", adminId, updated);
+        } catch (Exception e) {
+            log.debug("campaigns owner_id migration skipped: {}", e.getMessage());
+        }
+
+        // Set owner_id on existing contacts that have none
+        try {
+            int updated = jdbcTemplate.update(
+                "UPDATE contacts SET owner_id = ? WHERE owner_id IS NULL", adminId);
+            if (updated > 0) log.info("Set owner_id={} on {} existing contacts", adminId, updated);
+        } catch (Exception e) {
+            log.debug("contacts owner_id migration skipped: {}", e.getMessage());
+        }
+
+        // Drop old global unique constraint on contacts.email so the new composite one can work.
+        // MySQL: look up the index name in information_schema and drop it.
+        // H2: attempt a known constraint name drop.
+        try {
+            List<String> indexes = jdbcTemplate.queryForList(
+                "SELECT INDEX_NAME FROM information_schema.STATISTICS " +
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'contacts' " +
+                "AND NON_UNIQUE = 0 AND INDEX_NAME != 'PRIMARY' " +
+                "AND INDEX_NAME NOT IN ('uk_contact_email_owner')",
+                String.class);
+            for (String idxName : indexes) {
+                try {
+                    jdbcTemplate.execute("ALTER TABLE contacts DROP INDEX `" + idxName + "`");
+                    log.info("Dropped old unique index {} from contacts", idxName);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            // H2 fallback — try common Hibernate-generated names
+            for (String name : List.of("uk_contacts_email", "uk6g6lkdy4im8xfmk8h5otgxq9g")) {
+                try {
+                    jdbcTemplate.execute("ALTER TABLE contacts DROP CONSTRAINT " + name);
+                    log.info("Dropped H2 unique constraint {} from contacts", name);
+                } catch (Exception ignored) {}
+            }
         }
     }
 }

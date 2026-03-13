@@ -2,6 +2,7 @@ package com.campaignmanager.repository;
 
 import com.campaignmanager.model.EmailJob;
 import com.campaignmanager.model.EmailJobStatus;
+import com.campaignmanager.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -40,4 +41,10 @@ public interface EmailJobRepository extends JpaRepository<EmailJob, Long> {
 
     @Query("SELECT COUNT(ej) FROM EmailJob ej WHERE ej.campaignContact.contact.id = :contactId AND ej.status = 'SCHEDULED'")
     long countScheduledByContactId(@Param("contactId") Long contactId);
+
+    @Query("SELECT COUNT(ej) FROM EmailJob ej WHERE ej.status = :status AND ej.campaignContact.campaign.owner = :owner")
+    long countByStatusAndOwner(@Param("status") EmailJobStatus status, @Param("owner") User owner);
+
+    @Query("SELECT COUNT(ej) FROM EmailJob ej WHERE ej.status = 'SENT' AND ej.sentAt >= :since AND ej.campaignContact.campaign.owner = :owner")
+    long countSentSinceByOwner(@Param("since") LocalDateTime since, @Param("owner") User owner);
 }

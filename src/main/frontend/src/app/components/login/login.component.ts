@@ -26,42 +26,87 @@ import { AuthService } from '../../services/auth.service';
           <div class="login-header">
             <mat-icon class="login-icon">campaign</mat-icon>
             <h1>Campaign Manager</h1>
-            <p>Sign in to your account</p>
+            <p>{{ isRegisterMode ? 'Create your account' : 'Sign in to your account' }}</p>
           </div>
         </mat-card-header>
 
         <mat-card-content>
-          <form [formGroup]="form" (ngSubmit)="login()">
-            <mat-form-field appearance="outline">
-              <mat-label>Username</mat-label>
-              <input matInput formControlName="username" autocomplete="username">
-              <mat-icon matSuffix>person</mat-icon>
-            </mat-form-field>
+          @if (!isRegisterMode) {
+            <form [formGroup]="loginForm" (ngSubmit)="login()">
+              <mat-form-field appearance="outline">
+                <mat-label>Username</mat-label>
+                <input matInput formControlName="username" autocomplete="username">
+                <mat-icon matSuffix>person</mat-icon>
+              </mat-form-field>
 
-            <mat-form-field appearance="outline">
-              <mat-label>Password</mat-label>
-              <input matInput [type]="hidePassword ? 'password' : 'text'"
-                     formControlName="password" autocomplete="current-password">
-              <button mat-icon-button matSuffix type="button"
-                      (click)="hidePassword = !hidePassword">
-                <mat-icon>{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+              <mat-form-field appearance="outline">
+                <mat-label>Password</mat-label>
+                <input matInput [type]="hidePassword ? 'password' : 'text'"
+                       formControlName="password" autocomplete="current-password">
+                <button mat-icon-button matSuffix type="button"
+                        (click)="hidePassword = !hidePassword">
+                  <mat-icon>{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
+              </mat-form-field>
+
+              <button mat-raised-button color="primary" type="submit"
+                      [disabled]="loginForm.invalid || loading" class="login-btn">
+                @if (loading) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                } @else {
+                  Sign In
+                }
               </button>
-            </mat-form-field>
+            </form>
 
-            <button mat-raised-button color="primary" type="submit"
-                    [disabled]="form.invalid || loading" class="login-btn">
-              @if (loading) {
-                <mat-spinner diameter="20"></mat-spinner>
-              } @else {
-                Sign In
-              }
-            </button>
-          </form>
+            <div class="toggle-row">
+              <span>Don't have an account?</span>
+              <button mat-button color="primary" type="button" (click)="switchMode(true)">Create Account</button>
+            </div>
+          } @else {
+            <form [formGroup]="registerForm" (ngSubmit)="register()">
+              <mat-form-field appearance="outline">
+                <mat-label>Email Address</mat-label>
+                <input matInput formControlName="email" autocomplete="email" type="email"
+                       placeholder="you@gmail.com">
+                <mat-icon matSuffix>email</mat-icon>
+                @if (registerForm.get('email')?.hasError('required') && registerForm.get('email')?.touched) {
+                  <mat-error>Email is required</mat-error>
+                }
+                @if (registerForm.get('email')?.hasError('email') && registerForm.get('email')?.touched) {
+                  <mat-error>Enter a valid email address</mat-error>
+                }
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Password</mat-label>
+                <input matInput [type]="hidePassword ? 'password' : 'text'"
+                       formControlName="password" autocomplete="new-password">
+                <button mat-icon-button matSuffix type="button"
+                        (click)="hidePassword = !hidePassword">
+                  <mat-icon>{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+                </button>
+                @if (registerForm.get('password')?.hasError('minlength') && registerForm.get('password')?.touched) {
+                  <mat-error>Password must be at least 6 characters</mat-error>
+                }
+              </mat-form-field>
+
+              <button mat-raised-button color="primary" type="submit"
+                      [disabled]="registerForm.invalid || loading" class="login-btn">
+                @if (loading) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                } @else {
+                  Create Account
+                }
+              </button>
+            </form>
+
+            <div class="toggle-row">
+              <span>Already have an account?</span>
+              <button mat-button color="primary" type="button" (click)="switchMode(false)">Sign In</button>
+            </div>
+          }
         </mat-card-content>
-
-        <mat-card-footer>
-          <p class="hint">Default: admin / admin123</p>
-        </mat-card-footer>
       </mat-card>
     </div>
   `,
@@ -102,14 +147,24 @@ import { AuthService } from '../../services/auth.service';
       font-size: 15px;
       border-radius: 8px;
     }
-    .hint { text-align: center; color: #9aa0a6; font-size: 12px; padding: 8px; }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-top: 8px;
+      font-size: 13px;
+      color: #5f6368;
+    }
     mat-spinner { margin: 0 auto; }
   `]
 })
 export class LoginComponent {
-  form: FormGroup;
+  loginForm: FormGroup;
+  registerForm: FormGroup;
   loading = false;
   hidePassword = true;
+  isRegisterMode = false;
 
   constructor(
     private fb: FormBuilder,
@@ -117,22 +172,47 @@ export class LoginComponent {
     private router: Router,
     private snackBar: MatSnackBar
   ) {
-    this.form = this.fb.group({
+    this.loginForm = this.fb.group({
       username: ['', Validators.required],
       password: ['', Validators.required]
     });
+    this.registerForm = this.fb.group({
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', [Validators.required, Validators.minLength(6)]]
+    });
+  }
+
+  switchMode(register: boolean): void {
+    this.isRegisterMode = register;
+    this.loading = false;
+    this.hidePassword = true;
   }
 
   login(): void {
-    if (this.form.invalid) return;
+    if (this.loginForm.invalid) return;
     this.loading = true;
-    const { username, password } = this.form.value;
+    const { username, password } = this.loginForm.value;
 
     this.auth.login(username, password).subscribe({
       next: () => this.router.navigate(['/dashboard']),
       error: () => {
         this.loading = false;
         this.snackBar.open('Invalid username or password', 'Close', { duration: 3000, panelClass: 'snack-error' });
+      }
+    });
+  }
+
+  register(): void {
+    if (this.registerForm.invalid) return;
+    this.loading = true;
+    const { email, password } = this.registerForm.value;
+
+    this.auth.register(email, password).subscribe({
+      next: () => this.router.navigate(['/dashboard']),
+      error: (err: any) => {
+        this.loading = false;
+        const msg = err?.error?.message || 'Registration failed. Please try again.';
+        this.snackBar.open(msg, 'Close', { duration: 4000, panelClass: 'snack-error' });
       }
     });
   }

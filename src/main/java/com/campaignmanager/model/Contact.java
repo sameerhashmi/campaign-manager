@@ -2,13 +2,16 @@ package com.campaignmanager.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "contacts")
+@Table(name = "contacts",
+       uniqueConstraints = @UniqueConstraint(name = "uk_contact_email_owner", columnNames = {"email", "owner_id"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -21,8 +24,14 @@ public class Contact {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String email;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private User owner;
 
     private String role;
 

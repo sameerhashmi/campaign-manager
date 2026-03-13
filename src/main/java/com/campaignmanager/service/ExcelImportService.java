@@ -277,8 +277,12 @@ public class ExcelImportService {
             }
 
             try {
-                // Upsert contact — each save() is its own auto-transaction at repo level
-                Contact contact = contactRepository.findByEmail(email).orElse(new Contact());
+                // Upsert contact scoped to campaign owner
+                User campaignOwner = campaign.getOwner();
+                Contact contact = (campaignOwner != null)
+                        ? contactRepository.findByEmailAndOwner(email, campaignOwner).orElse(new Contact())
+                        : contactRepository.findByEmail(email).orElse(new Contact());
+                if (campaignOwner != null && contact.getOwner() == null) contact.setOwner(campaignOwner);
                 contact.setEmail(email);
                 String name = getCellString(row, nameCol);
                 if (name != null) contact.setName(name);
@@ -444,8 +448,12 @@ public class ExcelImportService {
             if (email == null || email.isBlank()) continue;
 
             try {
-                Contact contact = contactRepository.findByEmail(email).orElse(new Contact());
+                User campaignOwner = campaign.getOwner();
+                Contact contact = (campaignOwner != null)
+                        ? contactRepository.findByEmailAndOwner(email, campaignOwner).orElse(new Contact())
+                        : contactRepository.findByEmail(email).orElse(new Contact());
                 contact.setEmail(email);
+                if (campaignOwner != null && contact.getOwner() == null) contact.setOwner(campaignOwner);
                 if (nameCol    >= 0) contact.setName(getCellString(row, nameCol));
                 if (roleCol    >= 0) contact.setRole(getCellString(row, roleCol));
                 if (companyCol >= 0) contact.setCompany(getCellString(row, companyCol));

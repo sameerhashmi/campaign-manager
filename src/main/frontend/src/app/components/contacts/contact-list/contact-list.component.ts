@@ -13,6 +13,7 @@ import { MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { ContactService } from '../../../services/contact.service';
+import { AuthService } from '../../../services/auth.service';
 import { Contact } from '../../../models/contact.model';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 
@@ -100,6 +101,10 @@ import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
                   <th mat-header-cell *matHeaderCellDef>Company</th>
                   <td mat-cell *matCellDef="let c">{{ c.company }}</td>
                 </ng-container>
+                <ng-container matColumnDef="owner">
+                  <th mat-header-cell *matHeaderCellDef>Owner</th>
+                  <td mat-cell *matCellDef="let c">{{ c.ownerUsername || '—' }}</td>
+                </ng-container>
                 <ng-container matColumnDef="actions">
                   <th mat-header-cell *matHeaderCellDef></th>
                   <td mat-cell *matCellDef="let c">
@@ -149,6 +154,7 @@ export class ContactListComponent implements OnInit {
   loading = true;
   showForm = false;
   editingContact: Contact | null = null;
+  isAdmin = false;
 
   displayedColumns = ['name', 'email', 'role', 'company', 'actions'];
   contactForm: FormGroup;
@@ -158,6 +164,7 @@ export class ContactListComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private contactService: ContactService,
+    private authService: AuthService,
     private snackBar: MatSnackBar
   ) {
     this.contactForm = this.fb.group({
@@ -170,6 +177,10 @@ export class ContactListComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.isAdmin = this.authService.isAdmin();
+    if (this.isAdmin) {
+      this.displayedColumns = ['name', 'email', 'role', 'company', 'owner', 'actions'];
+    }
     this.load();
     this.searchControl.valueChanges.pipe(
       debounceTime(400),

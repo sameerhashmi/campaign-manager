@@ -49,9 +49,15 @@ import { AuthService } from '../../../services/auth.service';
         </mat-nav-list>
 
         <div class="sidenav-footer">
+          <div class="user-info">
+            <span class="user-email">{{ username }}</span>
+            @if (isAdmin) {
+              <span class="role-badge">Admin</span>
+            }
+          </div>
           <button mat-button (click)="logout()" class="logout-btn">
             <mat-icon>logout</mat-icon>
-            <span>Logout ({{ username }})</span>
+            <span>Logout</span>
           </button>
         </div>
       </mat-sidenav>
@@ -94,6 +100,17 @@ import { AuthService } from '../../../services/auth.service';
       padding: 8px;
       border-top: 1px solid rgba(255,255,255,0.2);
     }
+    .user-info {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 8px 2px; font-size: 12px; color: rgba(255,255,255,0.85);
+      overflow: hidden;
+    }
+    .user-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .role-badge {
+      background: rgba(255,255,255,0.25); color: white;
+      font-size: 10px; font-weight: 600; padding: 1px 6px;
+      border-radius: 10px; white-space: nowrap; flex-shrink: 0;
+    }
     .logout-btn {
       width: 100%;
       color: white;
@@ -108,6 +125,7 @@ import { AuthService } from '../../../services/auth.service';
 })
 export class NavComponent {
   username = this.auth.getUsername();
+  isAdmin = this.auth.isAdmin();
 
   constructor(private auth: AuthService, private router: Router) {}
 

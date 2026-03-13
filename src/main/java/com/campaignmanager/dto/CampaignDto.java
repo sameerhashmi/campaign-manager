@@ -28,4 +28,5 @@ public class CampaignDto {
     private List<EmailTemplateDto> templates;
     private long contactCount;
     private long jobCount;
+    private String ownerUsername;
 }
