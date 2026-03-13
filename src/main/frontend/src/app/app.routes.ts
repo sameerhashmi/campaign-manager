@@ -27,6 +27,24 @@ export const routes: Routes = [
       import('./components/campaigns/campaign-form/campaign-form.component').then(m => m.CampaignFormComponent)
   },
   {
+    path: 'campaigns/plan',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/campaigns/campaign-plan-wizard/campaign-plan-wizard.component').then(m => m.CampaignPlanWizardComponent)
+  },
+  {
+    path: 'campaigns/plan/:planId',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/campaigns/campaign-plan-wizard/campaign-plan-wizard.component').then(m => m.CampaignPlanWizardComponent)
+  },
+  {
+    path: 'campaigns/plan/:planId/detail',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/campaigns/campaign-v2-detail/campaign-v2-detail.component').then(m => m.CampaignV2DetailComponent)
+  },
+  {
     path: 'campaigns/:id/edit',
     canActivate: [authGuard],
     loadComponent: () =>

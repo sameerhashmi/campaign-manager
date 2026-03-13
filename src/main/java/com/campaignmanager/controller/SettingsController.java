@@ -1,8 +1,14 @@
 package com.campaignmanager.controller;
 
 import com.campaignmanager.dto.ConnectedSessionDto;
+import com.campaignmanager.dto.GeminiSettingsDto;
 import com.campaignmanager.dto.GmailSessionStatusDto;
+import com.campaignmanager.model.User;
+import com.campaignmanager.model.UserGeminiSettings;
 import com.campaignmanager.repository.CampaignRepository;
+import com.campaignmanager.repository.UserGeminiSettingsRepository;
+import com.campaignmanager.repository.UserRepository;
+import com.campaignmanager.service.GeminiApiService;
 import com.campaignmanager.service.PlaywrightSessionService;
 import com.campaignmanager.service.PlaywrightSystemDepsInstaller;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,6 +46,9 @@ public class SettingsController {
     private final PlaywrightSessionService sessionService;
     private final PlaywrightSystemDepsInstaller systemDepsInstaller;
     private final CampaignRepository campaignRepository;
+    private final UserGeminiSettingsRepository geminiSettingsRepository;
+    private final UserRepository userRepository;
+    private final GeminiApiService geminiApiService;
 
     // ─── Status ───────────────────────────────────────────────────────────────
 
@@ -234,7 +244,74 @@ public class SettingsController {
         }
     }
 
+    // ─── Gemini API Key ───────────────────────────────────────────────────────
+
+    @GetMapping("/gemini")
+    public ResponseEntity<GeminiSettingsDto> getGeminiSettings(Authentication auth) {
+        User user = resolveUser(auth);
+        return geminiSettingsRepository.findByUser(user)
+                .map(s -> {
+                    GeminiSettingsDto dto = new GeminiSettingsDto();
+                    dto.setConnected(true);
+                    String key = s.getApiKey();
+                    dto.setMaskedKey(key.length() > 4
+                            ? "••••••••" + key.substring(key.length() - 4)
+                            : "••••");
+                    return ResponseEntity.ok(dto);
+                })
+                .orElseGet(() -> {
+                    GeminiSettingsDto dto = new GeminiSettingsDto();
+                    dto.setConnected(false);
+                    return ResponseEntity.ok(dto);
+                });
+    }
+
+    @PostMapping("/gemini/api-key")
+    public ResponseEntity<GeminiSettingsDto> saveGeminiApiKey(@RequestBody Map<String, String> body,
+                                                              Authentication auth) {
+        String apiKey = body.getOrDefault("apiKey", "").trim();
+        if (apiKey.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        User user = resolveUser(auth);
+        UserGeminiSettings settings = geminiSettingsRepository.findByUser(user)
+                .orElse(new UserGeminiSettings());
+        settings.setUser(user);
+        settings.setApiKey(apiKey);
+        settings.setUpdatedAt(LocalDateTime.now());
+        geminiSettingsRepository.save(settings);
+
+        GeminiSettingsDto dto = new GeminiSettingsDto();
+        dto.setConnected(true);
+        dto.setMaskedKey("••••••••" + apiKey.substring(Math.max(0, apiKey.length() - 4)));
+        return ResponseEntity.ok(dto);
+    }
+
+    @DeleteMapping("/gemini/api-key")
+    public ResponseEntity<Void> deleteGeminiApiKey(Authentication auth) {
+        User user = resolveUser(auth);
+        geminiSettingsRepository.findByUser(user).ifPresent(geminiSettingsRepository::delete);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/gemini/test")
+    public ResponseEntity<Map<String, Object>> testGeminiConnection(Authentication auth) {
+        User user = resolveUser(auth);
+        return geminiSettingsRepository.findByUser(user)
+                .map(s -> {
+                    boolean ok = geminiApiService.testConnection(s.getApiKey());
+                    return ResponseEntity.ok(Map.<String, Object>of("ok", ok));
+                })
+                .orElseGet(() -> ResponseEntity.ok(
+                        Map.of("ok", false, "error", "No API key saved. Add your Gemini API key first.")));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private User resolveUser(Authentication auth) {
+        return userRepository.findByUsername(auth.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    }
 
     private boolean isAdmin(Authentication auth) {
         return auth != null && auth.getAuthorities().stream()
