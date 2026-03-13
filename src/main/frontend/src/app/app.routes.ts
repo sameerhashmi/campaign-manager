@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
+import { adminGuard } from './guards/admin.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
@@ -28,19 +29,19 @@ export const routes: Routes = [
   },
   {
     path: 'campaigns/plan',
-    canActivate: [authGuard],
+    canActivate: [authGuard, adminGuard],
     loadComponent: () =>
       import('./components/campaigns/campaign-plan-wizard/campaign-plan-wizard.component').then(m => m.CampaignPlanWizardComponent)
   },
   {
     path: 'campaigns/plan/:planId',
-    canActivate: [authGuard],
+    canActivate: [authGuard, adminGuard],
     loadComponent: () =>
       import('./components/campaigns/campaign-plan-wizard/campaign-plan-wizard.component').then(m => m.CampaignPlanWizardComponent)
   },
   {
     path: 'campaigns/plan/:planId/detail',
-    canActivate: [authGuard],
+    canActivate: [authGuard, adminGuard],
     loadComponent: () =>
       import('./components/campaigns/campaign-v2-detail/campaign-v2-detail.component').then(m => m.CampaignV2DetailComponent)
   },

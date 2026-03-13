@@ -16,6 +16,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { NavComponent } from '../shared/nav/nav.component';
 import { SettingsService, GmailSessionStatus, ConnectedSession } from '../../services/settings.service';
 import { GemService, Gem } from '../../services/gem.service';
+import { AuthService } from '../../services/auth.service';
 import { HttpClient } from '@angular/common/http';
 import { interval, Subscription } from 'rxjs';
 import { switchMap, takeWhile } from 'rxjs/operators';
@@ -182,7 +183,8 @@ import { switchMap, takeWhile } from 'rxjs/operators';
 
 
 
-        <!-- Gemini API Key Card -->
+        <!-- Gemini API Key Card (admin only) -->
+        @if (isAdmin) {
         <mat-card class="settings-card">
           <mat-card-header>
             <div mat-card-avatar class="gemini-avatar">
@@ -228,7 +230,7 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           </mat-card-actions>
         </mat-card>
 
-        <!-- Gems Management Card -->
+        <!-- Gems Management Card (admin only) -->
         <mat-card class="settings-card">
           <mat-card-header>
             <div mat-card-avatar class="gems-avatar">
@@ -310,6 +312,7 @@ import { switchMap, takeWhile } from 'rxjs/operators';
             </mat-card-actions>
           }
         </mat-card>
+        } <!-- end @if (isAdmin) for AI cards -->
 
       </div>
     </app-nav>
@@ -427,17 +430,23 @@ export class SettingsComponent implements OnInit, OnDestroy {
   savingGem = false;
   gemForm: Gem = { name: '', systemInstructions: '', gemType: 'CONTACT_RESEARCH' };
 
+  isAdmin = false;
+
   constructor(
     private settingsService: SettingsService,
     private gemService: GemService,
+    private authService: AuthService,
     private http: HttpClient,
     private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
+    this.isAdmin = this.authService.isAdmin();
     this.loadStatus();
-    this.loadGeminiStatus();
-    this.loadGems();
+    if (this.isAdmin) {
+      this.loadGeminiStatus();
+      this.loadGems();
+    }
   }
 
   ngOnDestroy(): void {
