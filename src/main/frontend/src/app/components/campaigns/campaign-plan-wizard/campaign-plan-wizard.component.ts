@@ -58,62 +58,73 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
 
               <mat-card class="step1-card">
                 <mat-card-content>
-                  <form [formGroup]="step1Form" class="step-form">
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Campaign Name *</mat-label>
-                      <input matInput formControlName="name" placeholder="e.g. Citadel Q2 Outreach">
-                      <mat-hint>Format: &lt;Company&gt; Campaign — e.g. Citadel Q2 Outreach</mat-hint>
-                    </mat-form-field>
+                  <div class="step1-columns">
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Customer / Account Name *</mat-label>
-                      <input matInput formControlName="customer" placeholder="e.g. Citadel">
-                    </mat-form-field>
+                    <!-- ── Left: Campaign Details ── -->
+                    <div class="step1-col">
+                      <div class="col-section-title">Campaign Details</div>
+                      <form [formGroup]="step1Form" class="step-form">
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Campaign Name *</mat-label>
+                          <input matInput formControlName="name" placeholder="e.g. Citadel Q2 Outreach">
+                          <mat-hint>Format: &lt;Company&gt; Campaign — e.g. Citadel Q2 Outreach</mat-hint>
+                        </mat-form-field>
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Tanzu Specialist (optional)</mat-label>
-                      <input matInput formControlName="tanzuContact" placeholder="e.g. Brian Smith">
-                      <mat-hint>Internal VMware/Tanzu contact for this campaign</mat-hint>
-                    </mat-form-field>
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Customer / Account Name *</mat-label>
+                          <input matInput formControlName="customer" placeholder="e.g. Citadel">
+                        </mat-form-field>
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Contact Research Gem *</mat-label>
-                      <mat-select formControlName="contactGemId">
-                        @for (gem of contactGems; track gem.id) {
-                          <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
-                        }
-                        @if (contactGems.length === 0) {
-                          <mat-option disabled>No Contact Research Gems found — create one in Settings</mat-option>
-                        }
-                      </mat-select>
-                      <mat-hint>Extracts prospect contacts from your briefing documents.</mat-hint>
-                    </mat-form-field>
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Tanzu Specialist (optional)</mat-label>
+                          <input matInput formControlName="tanzuContact" placeholder="e.g. Brian Smith">
+                          <mat-hint>Internal VMware/Tanzu contact for this campaign</mat-hint>
+                        </mat-form-field>
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Email Generation Gem *</mat-label>
-                      <mat-select formControlName="emailGemId">
-                        @for (gem of emailGems; track gem.id) {
-                          <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
-                        }
-                        @if (emailGems.length === 0) {
-                          <mat-option disabled>No Email Generation Gems found — create one in Settings</mat-option>
-                        }
-                      </mat-select>
-                      <mat-hint>Generates 7 personalized emails per selected contact.</mat-hint>
-                    </mat-form-field>
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Email Format (optional)</mat-label>
+                          <input matInput formControlName="emailFormat"
+                                 placeholder="e.g. firstname.lastname@broadcom.com">
+                          <mat-hint>Auto-fills contact emails. Use firstname, lastname, or flastname patterns.</mat-hint>
+                        </mat-form-field>
+                      </form>
+                    </div>
 
-                    <mat-form-field appearance="outline" class="full-width">
-                      <mat-label>Email Format (optional)</mat-label>
-                      <input matInput formControlName="emailFormat"
-                             placeholder="e.g. firstname.lastname@broadcom.com">
-                      <mat-hint>Auto-fills contact emails. Use firstname, lastname, or flastname patterns.</mat-hint>
-                    </mat-form-field>
-                  </form>
+                    <!-- ── Right: Research Criteria + Docs ── -->
+                    <div class="step1-col">
+                      <div class="col-section-title">Research Criteria</div>
+                      <form [formGroup]="step1Form" class="step-form">
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Contact Research Gem *</mat-label>
+                          <mat-select formControlName="contactGemId">
+                            @for (gem of contactGems; track gem.id) {
+                              <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
+                            }
+                            @if (contactGems.length === 0) {
+                              <mat-option disabled>No Contact Research Gems found — create one in Settings</mat-option>
+                            }
+                          </mat-select>
+                          <mat-hint>Extracts prospect contacts from your briefing documents.</mat-hint>
+                        </mat-form-field>
 
-                  <mat-divider style="margin: 16px 0"></mat-divider>
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Email Generation Gem *</mat-label>
+                          <mat-select formControlName="emailGemId">
+                            @for (gem of emailGems; track gem.id) {
+                              <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
+                            }
+                            @if (emailGems.length === 0) {
+                              <mat-option disabled>No Email Generation Gems found — create one in Settings</mat-option>
+                            }
+                          </mat-select>
+                          <mat-hint>Generates 7 personalized emails per selected contact.</mat-hint>
+                        </mat-form-field>
+                      </form>
 
-                  <!-- ─── Briefing Documents ─────────────────────────────── -->
-                  <div class="import-section">
+                      <mat-divider style="margin: 16px 0"></mat-divider>
+
+                      <!-- ─── Briefing Documents ─────────────────────────────── -->
+                      <div class="import-section">
                     <div class="section-title">
                       <mat-icon>description</mat-icon>
                       <strong>Briefing Documents *</strong>
@@ -198,7 +209,9 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                         }
                       </div>
                     }
-                  </div>
+                      </div><!-- /import-section -->
+                    </div><!-- /right col -->
+                  </div><!-- /step1-columns -->
                 </mat-card-content>
               </mat-card>
 
@@ -318,11 +331,23 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                     </ng-container>
                     <ng-container matColumnDef="teamDomain">
                       <th mat-header-cell *matHeaderCellDef>Team / Domain</th>
-                      <td mat-cell *matCellDef="let c">{{ c.teamDomain }}</td>
+                      <td mat-cell *matCellDef="let c">
+                        @if (editingContactId === c.id) {
+                          <input class="inline-input" [(ngModel)]="c.teamDomain" (blur)="saveContact(c)">
+                        } @else {
+                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.teamDomain }}</span>
+                        }
+                      </td>
                     </ng-container>
                     <ng-container matColumnDef="senioritySignal">
                       <th mat-header-cell *matHeaderCellDef>Seniority</th>
-                      <td mat-cell *matCellDef="let c">{{ c.senioritySignal }}</td>
+                      <td mat-cell *matCellDef="let c">
+                        @if (editingContactId === c.id) {
+                          <input class="inline-input" [(ngModel)]="c.senioritySignal" (blur)="saveContact(c)">
+                        } @else {
+                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.senioritySignal }}</span>
+                        }
+                      </td>
                     </ng-container>
                     <ng-container matColumnDef="tanzuRelevance">
                       <th mat-header-cell *matHeaderCellDef>Tanzu Relevance</th>
@@ -335,6 +360,20 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                     <ng-container matColumnDef="source">
                       <th mat-header-cell *matHeaderCellDef>Source</th>
                       <td mat-cell *matCellDef="let c">{{ c.source }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="actions">
+                      <th mat-header-cell *matHeaderCellDef style="width:48px"></th>
+                      <td mat-cell *matCellDef="let c">
+                        @if (editingContactId === c.id) {
+                          <button mat-icon-button (click)="saveContact(c)" matTooltip="Done editing" style="color:#188038">
+                            <mat-icon style="font-size:18px">check</mat-icon>
+                          </button>
+                        } @else {
+                          <button mat-icon-button (click)="startEditContact(c)" matTooltip="Edit row" style="color:#5f6368">
+                            <mat-icon style="font-size:18px">edit</mat-icon>
+                          </button>
+                        }
+                      </td>
                     </ng-container>
                     <tr mat-header-row *matHeaderRowDef="contactColumns; sticky: true"></tr>
                     <tr mat-row *matRowDef="let row; columns: contactColumns;"
@@ -378,6 +417,9 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                            (click)="selectContact(c)">
                         <div class="contact-item-name">{{ c.name }}</div>
                         <div class="contact-item-sub">{{ c.title }}</div>
+                        @if (c.email) {
+                          <div class="contact-item-email">{{ c.email }}</div>
+                        }
                         @if (emailsByContact[c.id!]) {
                           <span class="email-count-badge">{{ emailsByContact[c.id!].length }} emails</span>
                         }
@@ -599,8 +641,9 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       &:hover { background: #e8f0fe; }
       &.active { background: #e8f0fe; border-left: 3px solid #1a73e8; }
     }
-    .contact-item-name { font-weight: 600; font-size: 14px; }
-    .contact-item-sub  { font-size: 12px; color: #5f6368; margin-top: 2px; }
+    .contact-item-name  { font-weight: 600; font-size: 14px; }
+    .contact-item-sub   { font-size: 12px; color: #5f6368; margin-top: 2px; }
+    .contact-item-email { font-size: 11px; color: #1a73e8; margin-top: 2px; word-break: break-all; }
     .email-count-badge {
       display: inline-block; background: #1a73e8; color: white;
       font-size: 11px; border-radius: 10px; padding: 1px 7px; margin-top: 4px;
@@ -621,8 +664,16 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       mat-icon { font-size: 16px; width: 16px; height: 16px; }
     }
 
-    /* Step 1 card — matches Campaign 1.0 form style */
-    .step1-card { max-width: 720px; }
+    /* Step 1 card — two-column layout */
+    .step1-card { max-width: 1040px; }
+    .step1-columns {
+      display: flex; gap: 32px; align-items: flex-start;
+    }
+    .step1-col { flex: 1; min-width: 0; }
+    .col-section-title {
+      font-size: 13px; font-weight: 700; text-transform: uppercase;
+      color: #5f6368; letter-spacing: 0.5px; margin-bottom: 12px;
+    }
     .import-section { display: flex; flex-direction: column; gap: 12px; }
     .section-title {
       display: flex; align-items: center; gap: 8px; font-size: 15px;
@@ -700,7 +751,7 @@ export class CampaignPlanWizardComponent implements OnInit {
   editingContactId: number | null = null;
   step2Completed = false;
 
-  contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance', 'source'];
+  contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance', 'source', 'actions'];
 
   generatingEmails = false;
   emailGenError: string | null = null;
