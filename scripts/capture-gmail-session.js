@@ -19,8 +19,19 @@ const path = require('path');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-function isChatOrMeet(url) {
-  return url.includes('chat.google.com') || url.includes('meet.google.com');
+// Returns true for pages that should be auto-closed (Chat, Meet, or
+// mail.google.com/chat which is Chat embedded in Gmail).
+function isChatPage(url) {
+  return url.includes('chat.google.com')
+      || url.includes('meet.google.com')
+      || url.includes('mail.google.com/chat');
+}
+
+// Returns true for pages that look like the real Gmail inbox (not Chat).
+function isGmailInbox(url) {
+  return url.includes('mail.google.com')
+      && !url.includes('/chat')
+      && !url.includes('/meet');
 }
 
 function setupKeyCapture(onEnter) {
@@ -52,31 +63,28 @@ async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
 
-  // Close a page only if it's Google Chat or Google Meet.
-  // Uses a poll loop because the URL is about:blank at the moment the event fires.
+  // Close Chat/Meet tabs. Poll for real URL since it starts as about:blank.
   async function closeIfChat(p) {
     let url = '';
     for (let i = 0; i < 25; i++) {
-      try { url = p.url(); } catch (_) { return; } // page already closed
+      try { url = p.url(); } catch (_) { return; }
       if (url && url !== 'about:blank' && url !== 'about:newtab') break;
       await sleep(300);
     }
-    if (!url || !isChatOrMeet(url)) return;
-    console.log('\n  [auto-close chat/meet] ' + url.substring(0, 100));
+    if (!url || !isChatPage(url)) return;
+    console.log('\n  [auto-close chat] ' + url.substring(0, 100));
     try { await p.close(); } catch (e) { console.log('  [close error] ' + e.message); }
   }
 
-  // Catch new tabs opened by any page in the context
   context.on('page', closeIfChat);
 
   const page = await context.newPage();
-  // Also catch window.open() popups originating from the Gmail page
   page.on('popup', closeIfChat);
   await page.goto('https://mail.google.com');
 
   console.log('──────────────────────────────────────────────────────');
   console.log(' Sign in to Gmail in the browser that just opened.');
-  console.log(' Any Google Chat / Meet popups will be closed for you.');
+  console.log(' Google Chat popups will be closed automatically.');
   console.log(' Session saves automatically once your inbox is visible.');
   console.log(' Or press Enter / Space to capture manually at any time.');
   console.log('──────────────────────────────────────────────────────\n');
@@ -103,24 +111,28 @@ async function main() {
       break;
     }
 
-    // ── Sweep: close any Chat/Meet pages that slipped past the event handler ──
+    // Sweep: close any Chat/Meet tabs that slipped past the event handler
     for (const p of context.pages()) {
       let u = '';
       try { u = p.url(); } catch (_) { continue; }
-      if (!u || !isChatOrMeet(u)) continue;
-      console.log('\n  [sweep-close chat] ' + u.substring(0, 100));
-      try { await p.close(); } catch (_) {}
+      if (u && isChatPage(u)) {
+        console.log('\n  [sweep-close chat] ' + u.substring(0, 100));
+        try { await p.close(); } catch (_) {}
+      }
     }
 
-    // ── Find the Gmail inbox page ──
+    // Find the Gmail inbox page — skip Chat/Meet tabs even if on mail.google.com
     let gmailPage = null;
     for (const p of context.pages()) {
       try {
         const u = p.url();
-        if (u.includes('mail.google.com')) { gmailPage = p; break; }
+        if (isGmailInbox(u)) { gmailPage = p; break; }
       } catch (_) {}
     }
-    if (!gmailPage) continue;
+    if (!gmailPage) {
+      process.stdout.write('\r  Waiting for Gmail inbox...                           ');
+      continue;
+    }
 
     const url = gmailPage.url();
     process.stdout.write('\r  URL: ' + url.substring(0, 72).padEnd(72));
