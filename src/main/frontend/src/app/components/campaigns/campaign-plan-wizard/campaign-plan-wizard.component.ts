@@ -137,19 +137,18 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                     <!-- Google Drive mode -->
                     @if (docsMode === 'drive') {
                       <mat-form-field appearance="outline" style="width:100%">
-                        <mat-label>Google Drive Folder URL</mat-label>
-                        <input matInput [(ngModel)]="driveImportUrl"
-                               placeholder="https://drive.google.com/drive/folders/...">
+                        <mat-label>Google Doc / Slides URLs (one per line)</mat-label>
+                        <textarea matInput [(ngModel)]="driveImportUrls" rows="4"
+                                  placeholder="https://docs.google.com/document/d/...&#10;https://docs.google.com/presentation/d/..."></textarea>
                         <mat-icon matSuffix>add_to_drive</mat-icon>
-                        <mat-hint>Must be accessible with your connected Google/Gmail account</mat-hint>
+                        <mat-hint>Paste individual Google Docs or Slides share links, one per line</mat-hint>
                       </mat-form-field>
                       <div class="drive-info">
                         <mat-icon class="drive-info-icon">info</mat-icon>
                         <div>
-                          The app will use your connected Gmail session to access the folder.
-                          Supported: <strong>Google Docs, PDF, DOCX, TXT, HTML</strong>.
-                          All files in the folder will be imported automatically when you click
-                          <strong>Next</strong>.
+                          Open each file in Google Drive → <strong>Share → Copy link</strong>, then paste here.
+                          Works with <strong>Google Docs and Slides</strong>.
+                          Make sure your Gmail account is connected in Settings.
                         </div>
                       </div>
                     }
@@ -215,7 +214,7 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
               @if (generatingContacts) {
                 <div class="generating-state">
                   <mat-spinner diameter="48"></mat-spinner>
-                  <p class="generating-text">Gemini is analyzing your Drive folder…</p>
+                  <p class="generating-text">Gemini is analyzing your documents…</p>
                   <p class="generating-sub">This may take 20–60 seconds depending on the number of documents.</p>
                   @if (uploadedDocs.length > 0) {
                     <p class="generating-url"><mat-icon style="font-size:14px;vertical-align:middle">description</mat-icon> {{ uploadedDocs.length }} document(s) uploaded</p>
@@ -684,7 +683,7 @@ export class CampaignPlanWizardComponent implements OnInit {
   savingStep1 = false;
   uploadedDocs: CampaignPlanDocument[] = [];
   pendingFiles: File[] = [];
-  driveImportUrl = '';
+  driveImportUrls = '';
   importingFromDrive = false;
   docsMode: 'drive' | 'upload' = 'drive';
 
@@ -767,8 +766,15 @@ export class CampaignPlanWizardComponent implements OnInit {
   }
 
   hasDocuments(): boolean {
-    if (this.docsMode === 'drive') return !!this.driveImportUrl.trim() || this.uploadedDocs.length > 0;
+    if (this.docsMode === 'drive') return !!this.driveImportUrls.trim() || this.uploadedDocs.length > 0;
     return this.pendingFiles.length > 0 || this.uploadedDocs.length > 0;
+  }
+
+  parseDriveUrls(): string[] {
+    return this.driveImportUrls
+      .split(/[\n,]+/)
+      .map(u => u.trim())
+      .filter(u => u.length > 0);
   }
 
   saveStep1(stepper: any): void {
@@ -784,12 +790,13 @@ export class CampaignPlanWizardComponent implements OnInit {
       next: plan => {
         this.planId = plan.id!;
 
-        if (this.docsMode === 'drive' && this.driveImportUrl.trim()) {
-          // Import files from Drive folder, then advance
-          this.planService.importDocumentsFromDrive(this.planId, this.driveImportUrl.trim()).subscribe({
+        if (this.docsMode === 'drive' && this.driveImportUrls.trim()) {
+          // Import files from individual Drive/Docs URLs, then advance
+          const urls = this.parseDriveUrls();
+          this.planService.importDocumentsFromDrive(this.planId, urls).subscribe({
             next: newDocs => {
               this.uploadedDocs = [...this.uploadedDocs, ...newDocs];
-              this.driveImportUrl = '';
+              this.driveImportUrls = '';
               this.savingStep1 = false;
               stepper.selectedIndex = 1;
               this.generateContacts();
@@ -854,14 +861,15 @@ export class CampaignPlanWizardComponent implements OnInit {
   }
 
   importFromDrive(): void {
-    if (!this.driveImportUrl.trim()) return;
+    if (!this.driveImportUrls.trim()) return;
     this.importingFromDrive = true;
+    const urls = this.parseDriveUrls();
 
     const doImport = (planId: number) => {
-      this.planService.importDocumentsFromDrive(planId, this.driveImportUrl.trim()).subscribe({
+      this.planService.importDocumentsFromDrive(planId, urls).subscribe({
         next: docs => {
           this.uploadedDocs = [...this.uploadedDocs, ...docs];
-          this.driveImportUrl = '';
+          this.driveImportUrls = '';
           this.importingFromDrive = false;
           this.snackBar.open(`${docs.length} file(s) imported from Drive`, '', { duration: 4000, panelClass: 'snack-success' });
         },

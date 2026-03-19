@@ -130,9 +130,10 @@ public class CampaignPlanController {
     @PostMapping("/{id}/documents/from-drive")
     public ResponseEntity<List<CampaignPlanDocumentDto>> importFromDrive(
             @PathVariable Long id,
-            @RequestBody Map<String, String> body,
+            @RequestBody Map<String, Object> body,
             Authentication auth) {
-        String folderUrl = body.getOrDefault("folderUrl", "");
-        return ResponseEntity.ok(planService.importDocumentsFromDrive(id, folderUrl, auth));
+        @SuppressWarnings("unchecked")
+        List<String> fileUrls = (List<String>) body.getOrDefault("fileUrls", List.of());
+        return ResponseEntity.ok(planService.importDocumentsFromDrive(id, fileUrls, auth));
     }
 }

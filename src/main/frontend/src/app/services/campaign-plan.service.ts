@@ -141,10 +141,10 @@ export class CampaignPlanService {
     return this.http.delete<void>(`${this.base}/${planId}/documents/${docId}`);
   }
 
-  importDocumentsFromDrive(planId: number, folderUrl: string): Observable<CampaignPlanDocument[]> {
+  importDocumentsFromDrive(planId: number, fileUrls: string[]): Observable<CampaignPlanDocument[]> {
     return this.http.post<CampaignPlanDocument[]>(
       `${this.base}/${planId}/documents/from-drive`,
-      { folderUrl }
+      { fileUrls }
     );
   }
 }

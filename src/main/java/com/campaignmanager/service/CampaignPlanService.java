@@ -567,21 +567,19 @@ public class CampaignPlanService {
     }
 
     @Transactional
-    public List<CampaignPlanDocumentDto> importDocumentsFromDrive(Long planId, String folderUrl, Authentication auth) {
+    public List<CampaignPlanDocumentDto> importDocumentsFromDrive(Long planId, List<String> fileUrls, Authentication auth) {
         CampaignPlan plan = resolvePlan(planId, auth);
 
-        String folderId = googleDriveImportService.extractFolderId(folderUrl);
-        if (folderId == null || folderId.isBlank()) {
+        if (fileUrls == null || fileUrls.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Invalid Google Drive folder URL. Use the folder's share link (e.g. https://drive.google.com/drive/folders/...)");
+                    "No file URLs provided. Paste individual Google Docs / Slides share links.");
         }
 
-        List<CampaignPlanDocument> imported =
-                googleDriveImportService.importFolder(folderId, plan);
+        List<CampaignPlanDocument> imported = googleDriveImportService.importFiles(fileUrls, plan);
 
         if (imported.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "No supported files were found or downloaded from the Drive folder. Supported types: PDF, DOCX, TXT, HTML, Google Docs.");
+                    "No files could be downloaded. Make sure the links are Google Docs or Slides and your Gmail account is connected.");
         }
 
         return imported.stream().map(this::toDocumentDto).collect(Collectors.toList());
