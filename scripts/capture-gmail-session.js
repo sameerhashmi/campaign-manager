@@ -19,6 +19,10 @@ const path = require('path');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+function isGoogleAuthPage(url) {
+  return url.includes('mail.google.com') || url.includes('accounts.google.com');
+}
+
 function setupKeyCapture(onEnter) {
   if (!process.stdin.isTTY) return () => {};
   try {
@@ -48,28 +52,25 @@ async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
 
-  // Auto-close popup windows that aren't Gmail or Google login (e.g. Google Chat).
-  // waitForURL(predicate) receives a URL object — using a poll loop instead to
-  // avoid the TypeError from calling string methods on a URL object.
-  async function closeIfNotGmail(newPage) {
-    try {
-      let url = '';
-      for (let i = 0; i < 20; i++) {
-        url = newPage.url();
-        if (url && url !== 'about:blank' && url !== 'about:newtab') break;
-        await sleep(400);
-      }
-      if (!url || url.startsWith('about:')) return;
-      if (url.includes('mail.google.com') || url.includes('accounts.google.com')) return;
-      console.log('\n  [auto-close popup] ' + url.substring(0, 80));
-      await newPage.close();
-    } catch (_) {}
+  // Attempt to close a page that isn't Gmail/Google auth.
+  // Uses a poll loop because the URL is about:blank at the moment the event fires.
+  async function closeIfNotGmail(p) {
+    let url = '';
+    for (let i = 0; i < 25; i++) {
+      try { url = p.url(); } catch (_) { return; } // page already closed
+      if (url && url !== 'about:blank' && url !== 'about:newtab') break;
+      await sleep(300);
+    }
+    if (!url || url.startsWith('about:') || isGoogleAuthPage(url)) return;
+    console.log('\n  [auto-close] ' + url.substring(0, 100));
+    try { await p.close(); } catch (e) { console.log('  [close error] ' + e.message); }
   }
 
+  // Catch new tabs opened by any page in the context
   context.on('page', closeIfNotGmail);
 
   const page = await context.newPage();
-  // Also catch window.open() popups fired directly from the Gmail page
+  // Also catch window.open() popups originating from the Gmail page
   page.on('popup', closeIfNotGmail);
   await page.goto('https://mail.google.com');
 
@@ -83,7 +84,6 @@ async function main() {
   const inboxSelectors = [
     '[gh="cm"]',
     '[data-tooltip="Compose"]',
-    'div[role="main"]',
     '.nH',
     'div[data-view-id]',
   ];
@@ -103,7 +103,17 @@ async function main() {
       break;
     }
 
-    // Find the Gmail page (in case focus moved to another tab)
+    // ── Sweep: close every non-Gmail page that slipped past the event handler ──
+    for (const p of context.pages()) {
+      let u = '';
+      try { u = p.url(); } catch (_) { continue; }
+      if (!u || u === 'about:blank' || u === 'about:newtab') continue;
+      if (isGoogleAuthPage(u)) continue;
+      console.log('\n  [sweep-close] ' + u.substring(0, 100));
+      try { await p.close(); } catch (_) {}
+    }
+
+    // ── Find the Gmail inbox page ──
     let gmailPage = null;
     for (const p of context.pages()) {
       try {
@@ -116,7 +126,6 @@ async function main() {
     const url = gmailPage.url();
     process.stdout.write('\r  URL: ' + url.substring(0, 72).padEnd(72));
 
-    // Bring Gmail to front so selectors are active
     try { await gmailPage.bringToFront(); } catch (_) {}
 
     for (const sel of inboxSelectors) {
