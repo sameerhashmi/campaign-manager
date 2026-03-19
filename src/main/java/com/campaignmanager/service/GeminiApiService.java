@@ -366,17 +366,27 @@ public class GeminiApiService {
         }
     }
 
-    /** Strips markdown code fences if Gemini wraps JSON in ```json ... ``` */
+    /**
+     * Strips markdown code fences if Gemini wraps JSON in ```json ... ```.
+     * Also handles truncated responses where the closing fence is missing.
+     */
     private String extractJson(String text) {
         String trimmed = text.trim();
-        if (trimmed.startsWith("```")) {
-            int start = trimmed.indexOf('\n') + 1;
-            int end = trimmed.lastIndexOf("```");
-            if (end > start) {
-                return trimmed.substring(start, end).trim();
-            }
+        if (!trimmed.startsWith("```")) return trimmed;
+
+        // Strip the opening fence line (e.g. "```json\n" or "```\n")
+        int firstNewline = trimmed.indexOf('\n');
+        if (firstNewline < 0) return trimmed; // no content after the fence
+        String afterFence = trimmed.substring(firstNewline + 1);
+
+        // Strip closing fence if present
+        int closingFence = afterFence.lastIndexOf("```");
+        if (closingFence > 0) {
+            return afterFence.substring(0, closingFence).trim();
         }
-        return trimmed;
+
+        // No closing fence (truncated response) — return everything after the opening line
+        return afterFence.trim();
     }
 
     private String nvl(String s) {

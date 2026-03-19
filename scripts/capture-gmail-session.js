@@ -20,7 +20,9 @@ const path = require('path');
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 function isGoogleAuthPage(url) {
-  return url.includes('mail.google.com') || url.includes('accounts.google.com');
+  return url.includes('mail.google.com')
+      || url.includes('accounts.google.com')
+      || url.includes('broadcom.com');   // Broadcom SSO (Google Workspace login)
 }
 
 function setupKeyCapture(onEnter) {
