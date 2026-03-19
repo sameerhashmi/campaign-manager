@@ -51,13 +51,14 @@ async function main() {
   // Auto-close popup windows that aren't Gmail or Google login (e.g. Google Chat)
   context.on('page', async (newPage) => {
     try {
-      // Wait for the page to actually navigate away from about:blank
-      await newPage.waitForLoadState('domcontentloaded', { timeout: 5000 });
+      // Wait until the page actually navigates away from about:blank — the URL
+      // is always about:blank at the moment the 'page' event fires, so checking
+      // immediately would always look like a safe page and skip the close.
+      await newPage.waitForURL(u => !u.startsWith('about:'), { timeout: 8000 });
       const url = newPage.url();
-      // Never close about: pages or Google login/Gmail pages
       if (!url || url.startsWith('about:')) return;
       if (url.includes('mail.google.com') || url.includes('accounts.google.com')) return;
-      // Close anything else (Chat, Meet, etc.)
+      // Close anything else (Chat, Meet, Workspace, etc.)
       console.log('\n  [auto-close popup] ' + url.substring(0, 80));
       await newPage.close();
     } catch (_) {}

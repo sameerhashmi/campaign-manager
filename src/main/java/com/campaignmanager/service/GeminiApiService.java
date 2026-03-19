@@ -290,7 +290,7 @@ public class GeminiApiService {
     private List<ProspectContactDto> parseContactList(String text) {
         try {
             String json = extractJson(text);
-            JsonNode array = objectMapper.readTree(json);
+            JsonNode array = parseJsonWithRecovery(json);
             List<ProspectContactDto> result = new ArrayList<>();
             for (JsonNode node : array) {
                 ProspectContactDto dto = new ProspectContactDto();
@@ -311,14 +311,16 @@ public class GeminiApiService {
             return result;
         } catch (Exception e) {
             log.error("Failed to parse contact list from Gemini: {}", text, e);
-            throw new RuntimeException("Gemini returned an unexpected format for contacts. Please check your Gem instructions.", e);
+            throw new RuntimeException(
+                "Gemini returned an unexpected format for contacts — the response may have been truncated. " +
+                "Try reducing the size of your briefing documents or limiting the number of contacts requested in your Gem instructions.", e);
         }
     }
 
     private List<GeneratedEmailDto> parseEmailList(String text, List<LocalDateTime> schedule) {
         try {
             String json = extractJson(text);
-            JsonNode array = objectMapper.readTree(json);
+            JsonNode array = parseJsonWithRecovery(json);
             List<GeneratedEmailDto> result = new ArrayList<>();
             for (JsonNode node : array) {
                 GeneratedEmailDto dto = new GeneratedEmailDto();
@@ -334,7 +336,33 @@ public class GeminiApiService {
             return result;
         } catch (Exception e) {
             log.error("Failed to parse email list from Gemini: {}", text, e);
-            throw new RuntimeException("Gemini returned an unexpected format for emails. Please check your Gem instructions.", e);
+            throw new RuntimeException(
+                "Gemini returned an unexpected format for emails — the response may have been truncated. " +
+                "Try reducing the number of email steps in your Gem instructions.", e);
+        }
+    }
+
+    /**
+     * Parses JSON, with a recovery attempt for truncated arrays.
+     * When Gemini hits maxOutputTokens it cuts off mid-JSON; we try to salvage
+     * complete objects by finding the last closing brace and closing the array.
+     */
+    private JsonNode parseJsonWithRecovery(String json) throws Exception {
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception firstEx) {
+            // Only attempt recovery for arrays
+            if (!json.trim().startsWith("[")) throw firstEx;
+            int lastBrace = json.lastIndexOf('}');
+            if (lastBrace > 0) {
+                String recovered = json.substring(0, lastBrace + 1) + "]";
+                try {
+                    JsonNode result = objectMapper.readTree(recovered);
+                    log.warn("Gemini response was truncated — recovered {} items from partial JSON", result.size());
+                    return result;
+                } catch (Exception ignored) {}
+            }
+            throw firstEx;
         }
     }
 
