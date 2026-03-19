@@ -281,9 +281,13 @@ public class CampaignPlanService {
 
         // 2. Collect schedule from first selected contact's emails (shared across all contacts)
         List<ProspectContact> selected = prospectContactRepository.findAllByCampaignPlanAndSelectedTrue(plan);
+        // Only include contacts that actually have generated emails
+        selected = selected.stream()
+                .filter(pc -> !generatedEmailRepository.findAllByProspectContactOrderByStepNumber(pc).isEmpty())
+                .collect(Collectors.toList());
         if (selected.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "No contacts selected. Go back and select at least one contact.");
+                    "No contacts selected with generated emails. Generate emails for at least one contact first.");
         }
 
         // Use schedule from first contact's emails as the template schedule
