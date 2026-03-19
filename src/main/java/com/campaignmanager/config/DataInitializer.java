@@ -32,6 +32,8 @@ public class DataInitializer implements CommandLineRunner {
         }
         migrateEmailJobStatusColumn();
         migrateOwnerColumns();
+        migrateClientBriefingsFileContent();
+        migrateCampaignPlanDocuments();
     }
 
     /**
@@ -124,6 +126,50 @@ public class DataInitializer implements CommandLineRunner {
                     log.info("Dropped H2 unique constraint {} from contacts", name);
                 } catch (Exception ignored) {}
             }
+        }
+    }
+
+    /**
+     * Adds mime_type and file_content columns to client_briefings if they don't exist.
+     * Files are now stored as BLOBs in the DB instead of on the ephemeral CF filesystem.
+     */
+    private void migrateClientBriefingsFileContent() {
+        try {
+            jdbcTemplate.execute(
+                "ALTER TABLE client_briefings ADD COLUMN mime_type VARCHAR(255)");
+            log.info("Added mime_type column to client_briefings");
+        } catch (Exception e) {
+            log.debug("client_briefings.mime_type already exists or skipped: {}", e.getMessage());
+        }
+        try {
+            jdbcTemplate.execute(
+                "ALTER TABLE client_briefings ADD COLUMN file_content LONGBLOB");
+            log.info("Added file_content column to client_briefings");
+        } catch (Exception e) {
+            log.debug("client_briefings.file_content already exists or skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Creates the campaign_plan_documents table if it doesn't exist.
+     * Stores uploaded briefing files as BLOBs for RAG-style context injection into Gemini.
+     */
+    private void migrateCampaignPlanDocuments() {
+        try {
+            jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS campaign_plan_documents (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    campaign_plan_id BIGINT NOT NULL,
+                    original_file_name VARCHAR(255),
+                    mime_type VARCHAR(255),
+                    file_content LONGBLOB,
+                    created_at DATETIME,
+                    FOREIGN KEY (campaign_plan_id) REFERENCES campaign_plans(id) ON DELETE CASCADE
+                )
+                """);
+            log.info("campaign_plan_documents table ready");
+        } catch (Exception e) {
+            log.debug("campaign_plan_documents migration skipped: {}", e.getMessage());
         }
     }
 }

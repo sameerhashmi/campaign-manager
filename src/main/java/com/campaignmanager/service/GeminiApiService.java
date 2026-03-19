@@ -2,7 +2,6 @@ package com.campaignmanager.service;
 
 import com.campaignmanager.dto.GeneratedEmailDto;
 import com.campaignmanager.dto.ProspectContactDto;
-import com.campaignmanager.util.EmailScheduleCalculator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,24 +87,25 @@ public class GeminiApiService {
     }
 
     /**
-     * Runs the Contact Research Gem against the given Drive folder URL.
+     * Runs the Contact Research Gem using the provided document corpus (extracted text from uploaded files).
      */
     public List<ProspectContactDto> generateContactList(String apiKey, String model,
                                                         String systemInstructions,
-                                                        String driveFolderUrl) {
-        String prompt = buildContactResearchPrompt(driveFolderUrl);
+                                                        String documentCorpus) {
+        String prompt = buildContactResearchPrompt(documentCorpus);
         String rawResponse = call(apiKey, model, buildRequest(prompt, systemInstructions));
         return parseContactList(rawResponse);
     }
 
     /**
-     * Runs the Email Generation Gem for a single prospect contact.
+     * Runs the Email Generation Gem for a single prospect contact, with document corpus as context.
      */
     public List<GeneratedEmailDto> generateEmails(String apiKey, String model,
                                                   String systemInstructions,
                                                   ProspectContactDto contact,
-                                                  List<LocalDateTime> schedule) {
-        String prompt = buildEmailGenerationPrompt(contact, schedule);
+                                                  List<LocalDateTime> schedule,
+                                                  String documentCorpus) {
+        String prompt = buildEmailGenerationPrompt(contact, schedule, documentCorpus);
         String rawResponse = call(apiKey, model, buildRequest(prompt, systemInstructions));
         return parseEmailList(rawResponse, schedule);
     }
@@ -139,9 +138,17 @@ public class GeminiApiService {
         }
     }
 
-    private String buildContactResearchPrompt(String driveFolderUrl) {
+    private String buildContactResearchPrompt(String documentCorpus) {
+        String contentSection = (documentCorpus != null && !documentCorpus.isBlank())
+                ? documentCorpus
+                : "(No document content was provided.)";
+
         return """
-            Analyze all documents in the Google Drive folder at this URL: %s
+            Analyze the following customer briefing documents.
+
+            %s
+
+            --- END OF DOCUMENT CONTENT ---
 
             Extract a comprehensive list of all people (prospects/contacts) mentioned in these documents.
             Focus on customer-side stakeholders relevant to a Tanzu/VMware sales engagement.
@@ -164,13 +171,24 @@ public class GeminiApiService {
             ]
 
             Include all people mentioned across all documents. If a field is unknown, use an empty string.
-            """.formatted(driveFolderUrl);
+            """.formatted(contentSection);
     }
 
-    private String buildEmailGenerationPrompt(ProspectContactDto contact, List<LocalDateTime> schedule) {
+    private String buildEmailGenerationPrompt(ProspectContactDto contact,
+                                              List<LocalDateTime> schedule,
+                                              String documentCorpus) {
+        String corpusSection = (documentCorpus != null && !documentCorpus.isBlank())
+                ? """
+
+                    Customer Briefing Context (use this to personalize the emails):
+                    %s
+                    --- END OF BRIEFING CONTEXT ---
+                    """.formatted(documentCorpus)
+                : "";
+
         return """
             Generate a sequence of 7 personalized sales emails for the following prospect.
-
+            %s
             Prospect Profile:
             - Name: %s
             - Title: %s
@@ -202,7 +220,9 @@ public class GeminiApiService {
             ]
 
             Generate all 7 emails. Each email should build on the previous. Be concise and personalized.
+            Reference specific technologies, projects, or pain points from the briefing context.
             """.formatted(
+                corpusSection,
                 nvl(contact.getName()),
                 nvl(contact.getTitle()),
                 nvl(contact.getEmail()),

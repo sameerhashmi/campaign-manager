@@ -5,8 +5,6 @@ import com.campaignmanager.model.ClientBriefing;
 import com.campaignmanager.service.ClientBriefingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -15,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 
 @RestController
@@ -57,26 +54,20 @@ public class ClientBriefingController {
     }
 
     /**
-     * Serves the uploaded document file.
+     * Serves the uploaded document from DB storage.
      * PDF and HTML open inline in the browser; DOC/DOCX trigger a download.
      */
     @GetMapping("/{id}/document")
-    public ResponseEntity<Resource> serveDocument(@PathVariable Long id) {
+    public ResponseEntity<byte[]> serveDocument(@PathVariable Long id) {
         ClientBriefing briefing = briefingService.getEntity(id);
-        if (briefing.getUploadedFileName() == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Path filePath = briefingService.getFilePath(id);
-        Resource resource = new FileSystemResource(filePath);
-        if (!resource.exists()) {
-            log.warn("Briefing file not found on disk: {}", filePath);
+        if (briefing.getFileContent() == null || briefing.getFileContent().length == 0) {
+            log.warn("Briefing {} has no file content in DB", id);
             return ResponseEntity.notFound().build();
         }
 
         String originalName = briefing.getOriginalFileName() != null
                 ? briefing.getOriginalFileName() : briefing.getUploadedFileName();
-        String lower = originalName.toLowerCase();
+        String lower = originalName != null ? originalName.toLowerCase() : "";
 
         MediaType mediaType;
         ContentDisposition disposition;
@@ -95,13 +86,15 @@ public class ClientBriefingController {
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
             disposition = ContentDisposition.attachment().filename(originalName).build();
         } else {
-            mediaType = MediaType.APPLICATION_OCTET_STREAM;
+            mediaType = briefing.getMimeType() != null
+                    ? MediaType.parseMediaType(briefing.getMimeType())
+                    : MediaType.APPLICATION_OCTET_STREAM;
             disposition = ContentDisposition.attachment().filename(originalName).build();
         }
 
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .body(resource);
+                .body(briefing.getFileContent());
     }
 }

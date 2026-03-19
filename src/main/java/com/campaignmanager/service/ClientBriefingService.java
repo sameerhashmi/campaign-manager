@@ -10,10 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,8 +18,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class ClientBriefingService {
-
-    private static final String BRIEFINGS_DIR = "./data/briefings";
 
     private final ClientBriefingRepository briefingRepository;
 
@@ -52,15 +46,12 @@ public class ClientBriefingService {
             String originalName = file.getOriginalFilename();
             String storedName = briefing.getId() + "_" + System.currentTimeMillis() + "_" + sanitize(originalName);
 
-            Path dir = Paths.get(BRIEFINGS_DIR);
-            Files.createDirectories(dir);
-            Path dest = dir.resolve(storedName);
-            Files.copy(file.getInputStream(), dest, StandardCopyOption.REPLACE_EXISTING);
-
             briefing.setUploadedFileName(storedName);
             briefing.setOriginalFileName(originalName);
+            briefing.setMimeType(file.getContentType());
+            briefing.setFileContent(file.getBytes());
             briefing = briefingRepository.save(briefing);
-            log.info("Saved briefing file {} ({} bytes)", storedName, file.getSize());
+            log.info("Saved briefing file {} ({} bytes) to DB", storedName, file.getSize());
         }
 
         return toDto(briefing);
@@ -68,25 +59,7 @@ public class ClientBriefingService {
 
     @Transactional
     public void delete(Long id) {
-        ClientBriefing briefing = getEntity(id);
-        if (briefing.getUploadedFileName() != null) {
-            Path filePath = Paths.get(BRIEFINGS_DIR, briefing.getUploadedFileName());
-            try {
-                Files.deleteIfExists(filePath);
-                log.info("Deleted briefing file {}", briefing.getUploadedFileName());
-            } catch (IOException e) {
-                log.warn("Could not delete briefing file {}: {}", briefing.getUploadedFileName(), e.getMessage());
-            }
-        }
         briefingRepository.deleteById(id);
-    }
-
-    public Path getFilePath(Long id) {
-        ClientBriefing briefing = getEntity(id);
-        if (briefing.getUploadedFileName() == null) {
-            throw new RuntimeException("No uploaded file for briefing: " + id);
-        }
-        return Paths.get(BRIEFINGS_DIR, briefing.getUploadedFileName());
     }
 
     public ClientBriefing getEntity(Long id) {

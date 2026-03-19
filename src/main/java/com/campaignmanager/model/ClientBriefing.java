@@ -30,6 +30,13 @@ public class ClientBriefing {
     @Column(name = "original_file_name")
     private String originalFileName;
 
+    @Column(name = "mime_type")
+    private String mimeType;
+
+    @Lob
+    @Column(name = "file_content", columnDefinition = "LONGBLOB")
+    private byte[] fileContent;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

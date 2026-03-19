@@ -526,11 +526,6 @@ public class CampaignPlanService {
     @Transactional
     public List<CampaignPlanDocumentDto> importDocumentsFromDrive(Long planId, String folderUrl, Authentication auth) {
         CampaignPlan plan = resolvePlan(planId, auth);
-        User owner = resolveUser(auth);
-
-        UserGeminiSettings settings = geminiSettingsRepository.findByUser(owner)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "No Gemini API key configured. Add your API key in Settings → Gemini first."));
 
         String folderId = googleDriveImportService.extractFolderId(folderUrl);
         if (folderId == null || folderId.isBlank()) {
@@ -539,7 +534,7 @@ public class CampaignPlanService {
         }
 
         List<CampaignPlanDocument> imported =
-                googleDriveImportService.importFolder(folderId, settings.getApiKey(), plan);
+                googleDriveImportService.importFolder(folderId, plan);
 
         if (imported.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,

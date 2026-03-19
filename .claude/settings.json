@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(pkill:*)",
+      "Bash(mvn package:*)",
+      "Read(//Users/sameerhashmi/workspace/campaigntool/backend/src/campaign/**)",
+      "Bash(mvn clean package:*)",
+      "Bash(echo:*)",
+      "Bash(cf ssh:*)",
+      "Bash(cf push:*)",
+      "Bash(cf logs:*)",
+      "Bash(ls -la src/main/resources/static/*.js)",
+      "Bash(grep -l \"Email Sender\\\\|senderFilter\\\\|campaignsDS\" src/main/resources/static/*.js)",
+      "Bash(jar tf target/campaign-manager-1.0.0.jar)",
+      "Bash(cf apps)",
+      "Bash(ls -la \"/Users/sameerhashmi/workspace/CC App/target/\"*.jar)",
+      "Bash(cf app campaign-manager)",
+      "Bash(cf scale sh-campaign-manager -i 1)",
+      "Bash(cf target:*)",
+      "Bash(cf login:*)",
+      "Bash(cf oauth-token:*)",
+      "Bash(python3 -:*)"
+    ]
+  }
+}

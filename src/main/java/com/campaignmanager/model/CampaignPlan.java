@@ -67,4 +67,7 @@ public class CampaignPlan {
 
     @OneToMany(mappedBy = "campaignPlan", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProspectContact> prospectContacts = new ArrayList<>();
+
+    @OneToMany(mappedBy = "campaignPlan", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CampaignPlanDocument> documents = new ArrayList<>();
 }

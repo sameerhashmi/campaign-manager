@@ -46,7 +46,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
           <!-- ═══ STEP 1: Campaign Details ═══ -->
           <mat-step [stepControl]="step1Form" label="Campaign Details">
             <div class="step-content">
-              <p class="step-desc">Provide campaign details and select your Gemini Gems.</p>
 
               @if (!geminiConnected) {
                 <div class="warning-banner">
@@ -57,117 +56,147 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                 </div>
               }
 
-              <form [formGroup]="step1Form" class="step-form">
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Campaign Name *</mat-label>
-                  <input matInput formControlName="name" placeholder="e.g. Citadel Q2 Outreach">
-                </mat-form-field>
+              <mat-card class="step1-card">
+                <mat-card-content>
+                  <form [formGroup]="step1Form" class="step-form">
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Campaign Name *</mat-label>
+                      <input matInput formControlName="name" placeholder="e.g. Citadel Q2 Outreach">
+                      <mat-hint>Format: &lt;Company&gt; Campaign — e.g. Citadel Q2 Outreach</mat-hint>
+                    </mat-form-field>
 
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Customer / Account Name *</mat-label>
-                  <input matInput formControlName="customer" placeholder="e.g. Citadel">
-                </mat-form-field>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Customer / Account Name *</mat-label>
+                      <input matInput formControlName="customer" placeholder="e.g. Citadel">
+                    </mat-form-field>
 
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Tanzu Specialist (optional)</mat-label>
-                  <input matInput formControlName="tanzuContact" placeholder="e.g. Brian Smith">
-                </mat-form-field>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Tanzu Specialist (optional)</mat-label>
+                      <input matInput formControlName="tanzuContact" placeholder="e.g. Brian Smith">
+                      <mat-hint>Internal VMware/Tanzu contact for this campaign</mat-hint>
+                    </mat-form-field>
 
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Contact Research Gem *</mat-label>
-                  <mat-select formControlName="contactGemId">
-                    @for (gem of contactGems; track gem.id) {
-                      <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
-                    }
-                    @if (contactGems.length === 0) {
-                      <mat-option disabled>No Contact Research Gems found — create one in Settings</mat-option>
-                    }
-                  </mat-select>
-                  <mat-hint>Gem used to extract contacts from the uploaded briefing documents.</mat-hint>
-                </mat-form-field>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Contact Research Gem *</mat-label>
+                      <mat-select formControlName="contactGemId">
+                        @for (gem of contactGems; track gem.id) {
+                          <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
+                        }
+                        @if (contactGems.length === 0) {
+                          <mat-option disabled>No Contact Research Gems found — create one in Settings</mat-option>
+                        }
+                      </mat-select>
+                      <mat-hint>Extracts prospect contacts from your briefing documents.</mat-hint>
+                    </mat-form-field>
 
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Email Generation Gem *</mat-label>
-                  <mat-select formControlName="emailGemId">
-                    @for (gem of emailGems; track gem.id) {
-                      <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
-                    }
-                    @if (emailGems.length === 0) {
-                      <mat-option disabled>No Email Generation Gems found — create one in Settings</mat-option>
-                    }
-                  </mat-select>
-                  <mat-hint>Gem used to generate 7 personalized emails per contact.</mat-hint>
-                </mat-form-field>
-              </form>
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Email Generation Gem *</mat-label>
+                      <mat-select formControlName="emailGemId">
+                        @for (gem of emailGems; track gem.id) {
+                          <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
+                        }
+                        @if (emailGems.length === 0) {
+                          <mat-option disabled>No Email Generation Gems found — create one in Settings</mat-option>
+                        }
+                      </mat-select>
+                      <mat-hint>Generates 7 personalized emails per selected contact.</mat-hint>
+                    </mat-form-field>
+                  </form>
 
-              <!-- ─── Document Upload ─────────────────────────────────────── -->
-              <div class="upload-section">
-                <div class="upload-label">
-                  <mat-icon>upload_file</mat-icon>
-                  <span>Briefing Documents *</span>
-                  <span class="upload-hint">HTML, PDF, DOCX, TXT — Gemini reads these to find contacts and generate emails</span>
-                </div>
+                  <mat-divider style="margin: 16px 0"></mat-divider>
 
-                <div class="upload-drop-zone" (click)="fileInput.click()">
-                  <mat-icon class="upload-icon">cloud_upload</mat-icon>
-                  <p>Click to attach files</p>
-                  <input #fileInput type="file" multiple accept=".html,.htm,.pdf,.docx,.txt"
-                         style="display:none" (change)="onFilesSelected($event)">
-                </div>
+                  <!-- ─── Briefing Documents ─────────────────────────────── -->
+                  <div class="import-section">
+                    <div class="section-title">
+                      <mat-icon>description</mat-icon>
+                      <strong>Briefing Documents *</strong>
+                    </div>
+                    <div class="section-sub">
+                      Gemini reads these documents to identify contacts and generate personalized emails.
+                    </div>
 
-                <!-- Google Drive folder import -->
-                <div class="drive-import-row">
-                  <mat-icon class="drive-icon">add_to_drive</mat-icon>
-                  <mat-form-field appearance="outline" class="drive-field">
-                    <mat-label>Or import from a Google Drive folder</mat-label>
-                    <input matInput [(ngModel)]="driveImportUrl"
-                           placeholder="https://drive.google.com/drive/folders/...">
-                    <mat-hint>Folder must be shared as "Anyone with the link can view"</mat-hint>
-                  </mat-form-field>
-                  <button mat-stroked-button
-                          [disabled]="!driveImportUrl.trim() || importingFromDrive"
-                          (click)="importFromDrive()">
-                    @if (importingFromDrive) {
-                      <mat-spinner diameter="18" style="display:inline-block;margin-right:4px"></mat-spinner>
-                    } @else {
-                      <mat-icon>download</mat-icon>
-                    }
-                    Import
-                  </button>
-                </div>
+                    <!-- Mode tabs — same pattern as Campaign 1.0 -->
+                    <div class="mode-tabs">
+                      <button type="button" class="mode-tab" [class.active]="docsMode === 'drive'"
+                              (click)="docsMode = 'drive'">
+                        <mat-icon>add_to_drive</mat-icon> Google Drive Folder
+                      </button>
+                      <button type="button" class="mode-tab" [class.active]="docsMode === 'upload'"
+                              (click)="docsMode = 'upload'">
+                        <mat-icon>upload_file</mat-icon> Upload Files
+                      </button>
+                    </div>
 
-                @if (uploadedDocs.length > 0 || pendingFiles.length > 0) {
-                  <div class="doc-list">
-                    @for (doc of uploadedDocs; track doc.id) {
-                      <div class="doc-item">
-                        <mat-icon class="doc-icon">description</mat-icon>
-                        <span class="doc-name">{{ doc.originalFileName }}</span>
-                        <button mat-icon-button (click)="removeUploadedDoc(doc)" matTooltip="Remove">
-                          <mat-icon style="font-size:16px">close</mat-icon>
-                        </button>
+                    <!-- Google Drive mode -->
+                    @if (docsMode === 'drive') {
+                      <mat-form-field appearance="outline" style="width:100%">
+                        <mat-label>Google Drive Folder URL</mat-label>
+                        <input matInput [(ngModel)]="driveImportUrl"
+                               placeholder="https://drive.google.com/drive/folders/...">
+                        <mat-icon matSuffix>add_to_drive</mat-icon>
+                        <mat-hint>Must be accessible with your connected Google/Gmail account</mat-hint>
+                      </mat-form-field>
+                      <div class="drive-info">
+                        <mat-icon class="drive-info-icon">info</mat-icon>
+                        <div>
+                          The app will use your connected Gmail session to access the folder.
+                          Supported: <strong>Google Docs, PDF, DOCX, TXT, HTML</strong>.
+                          All files in the folder will be imported automatically when you click
+                          <strong>Next</strong>.
+                        </div>
                       </div>
                     }
-                    @for (f of pendingFiles; track f.name) {
-                      <div class="doc-item pending">
-                        <mat-icon class="doc-icon">attach_file</mat-icon>
-                        <span class="doc-name">{{ f.name }}</span>
-                        <button mat-icon-button (click)="removePendingFile(f)" matTooltip="Remove">
-                          <mat-icon style="font-size:16px">close</mat-icon>
-                        </button>
+
+                    <!-- Upload Files mode -->
+                    @if (docsMode === 'upload') {
+                      <div class="file-drop-area" (click)="fileInput.click()"
+                           [class.has-file]="pendingFiles.length > 0">
+                        <mat-icon>upload_file</mat-icon>
+                        @if (pendingFiles.length > 0) {
+                          <span>{{ pendingFiles.length }} file(s) selected — click to add more</span>
+                        } @else {
+                          <span>Click to attach files (HTML, PDF, DOCX, TXT)</span>
+                        }
+                        <input #fileInput type="file" multiple accept=".html,.htm,.pdf,.docx,.txt"
+                               hidden (change)="onFilesSelected($event)">
+                      </div>
+                    }
+
+                    <!-- Document list (shown in both modes) -->
+                    @if (uploadedDocs.length > 0 || pendingFiles.length > 0) {
+                      <div class="doc-list">
+                        @for (doc of uploadedDocs; track doc.id) {
+                          <div class="doc-item">
+                            <mat-icon class="doc-icon">description</mat-icon>
+                            <span class="doc-name">{{ doc.originalFileName }}</span>
+                            <button mat-icon-button (click)="removeUploadedDoc(doc)" matTooltip="Remove">
+                              <mat-icon style="font-size:16px">close</mat-icon>
+                            </button>
+                          </div>
+                        }
+                        @for (f of pendingFiles; track f.name) {
+                          <div class="doc-item pending">
+                            <mat-icon class="doc-icon">attach_file</mat-icon>
+                            <span class="doc-name">{{ f.name }}</span>
+                            <button mat-icon-button (click)="removePendingFile(f)" matTooltip="Remove">
+                              <mat-icon style="font-size:16px">close</mat-icon>
+                            </button>
+                          </div>
+                        }
                       </div>
                     }
                   </div>
-                }
-              </div>
+                </mat-card-content>
+              </mat-card>
 
               <div class="step-actions">
-                <button mat-stroked-button (click)="cancel()">Cancel</button>
+                <button mat-button (click)="cancel()">Cancel</button>
                 <button mat-raised-button color="primary"
-                        [disabled]="step1Form.invalid || savingStep1 || (uploadedDocs.length === 0 && pendingFiles.length === 0)"
+                        [disabled]="step1Form.invalid || savingStep1 || !hasDocuments()"
                         (click)="saveStep1(stepper)">
                   @if (savingStep1) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
-                  Next: Generate Customer List
-                  <mat-icon>arrow_forward</mat-icon>
+                  {{ savingStep1 ? (docsMode === 'drive' ? 'Importing from Drive…' : 'Uploading…') : 'Next: Generate Customer List' }}
+                  @if (!savingStep1) { <mat-icon>arrow_forward</mat-icon> }
                 </button>
               </div>
             </div>
@@ -574,28 +603,41 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       mat-icon { font-size: 16px; width: 16px; height: 16px; }
     }
 
-    /* Document upload */
-    .upload-section { max-width: 560px; margin-top: 8px; }
-    .upload-label {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-      font-size: 14px; font-weight: 500; color: #3c4043;
-      mat-icon { font-size: 18px; width: 18px; height: 18px; color: #5f6368; }
+    /* Step 1 card — matches Campaign 1.0 form style */
+    .step1-card { max-width: 720px; }
+    .import-section { display: flex; flex-direction: column; gap: 12px; }
+    .section-title {
+      display: flex; align-items: center; gap: 8px; font-size: 15px;
+      mat-icon { color: #1a73e8; }
     }
-    .upload-hint { font-size: 12px; font-weight: 400; color: #9aa0a6; }
-    .upload-drop-zone {
-      border: 2px dashed #dadce0; border-radius: 8px; padding: 24px;
-      text-align: center; cursor: pointer; transition: border-color 0.2s;
-      color: #5f6368; font-size: 13px;
-      mat-icon.upload-icon { font-size: 36px; width: 36px; height: 36px; display: block; margin: 0 auto 8px; color: #9aa0a6; }
-      p { margin: 0; }
+    .section-sub { font-size: 12px; color: #5f6368; margin-top: -4px; }
+    .mode-tabs {
+      display: flex; gap: 0; border: 1px solid #dadce0; border-radius: 8px;
+      overflow: hidden; width: fit-content;
+    }
+    .mode-tab {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 18px; border: none; background: #f8f9fa; cursor: pointer;
+      font-size: 13px; font-weight: 500; color: #5f6368; transition: background 0.15s;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; }
+      &.active { background: #1a73e8; color: #fff; }
+      &:not(.active):hover { background: #e8eaed; }
+    }
+    .file-drop-area {
+      border: 2px dashed #dadce0; border-radius: 8px;
+      padding: 20px; display: flex; align-items: center; gap: 10px;
+      cursor: pointer; color: #5f6368; font-size: 14px; transition: border-color 0.2s;
       &:hover { border-color: #1a73e8; color: #1a73e8; }
+      &.has-file { border-color: #188038; color: #188038; background: #f0faf4; }
+      mat-icon { flex-shrink: 0; }
     }
-    .drive-import-row {
-      display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+    .drive-info {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: #e8f0fe; padding: 12px 14px; border-radius: 8px;
+      font-size: 12px; color: #3c4043;
     }
-    .drive-icon { color: #1a73e8; margin-top: 14px; flex-shrink: 0; font-size: 22px; width: 22px; height: 22px; }
-    .drive-field { flex: 1; min-width: 260px; }
-    .doc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .drive-info-icon { color: #1a73e8; font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+    .doc-list { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; }
     .doc-item {
       display: flex; align-items: center; gap: 8px; padding: 6px 10px;
       background: #e8f5e9; border-radius: 6px; font-size: 13px;
@@ -626,6 +668,7 @@ export class CampaignPlanWizardComponent implements OnInit {
   pendingFiles: File[] = [];
   driveImportUrl = '';
   importingFromDrive = false;
+  docsMode: 'drive' | 'upload' = 'drive';
 
   contacts: ProspectContact[] = [];
   generatingContacts = false;
@@ -703,6 +746,11 @@ export class CampaignPlanWizardComponent implements OnInit {
     this.planService.getDocuments(id).subscribe(docs => this.uploadedDocs = docs);
   }
 
+  hasDocuments(): boolean {
+    if (this.docsMode === 'drive') return !!this.driveImportUrl.trim() || this.uploadedDocs.length > 0;
+    return this.pendingFiles.length > 0 || this.uploadedDocs.length > 0;
+  }
+
   saveStep1(stepper: any): void {
     if (this.step1Form.invalid) return;
     this.savingStep1 = true;
@@ -715,7 +763,25 @@ export class CampaignPlanWizardComponent implements OnInit {
     save$.subscribe({
       next: plan => {
         this.planId = plan.id!;
-        if (this.pendingFiles.length > 0) {
+
+        if (this.docsMode === 'drive' && this.driveImportUrl.trim()) {
+          // Import files from Drive folder, then advance
+          this.planService.importDocumentsFromDrive(this.planId, this.driveImportUrl.trim()).subscribe({
+            next: newDocs => {
+              this.uploadedDocs = [...this.uploadedDocs, ...newDocs];
+              this.driveImportUrl = '';
+              this.savingStep1 = false;
+              stepper.selectedIndex = 1;
+              this.generateContacts();
+            },
+            error: err => {
+              this.savingStep1 = false;
+              const msg = err?.error?.message ?? 'Failed to import from Drive. Make sure your Gmail account is connected and the folder is shared with it.';
+              this.snackBar.open(msg, 'Close', { duration: 10000 });
+            }
+          });
+        } else if (this.pendingFiles.length > 0) {
+          // Upload local files, then advance
           this.planService.uploadDocuments(this.planId, this.pendingFiles).subscribe({
             next: newDocs => {
               this.uploadedDocs = [...this.uploadedDocs, ...newDocs];
@@ -730,6 +796,7 @@ export class CampaignPlanWizardComponent implements OnInit {
             }
           });
         } else {
+          // Already have uploaded docs, just advance
           this.savingStep1 = false;
           stepper.selectedIndex = 1;
           this.generateContacts();

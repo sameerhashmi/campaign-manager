@@ -27,6 +27,7 @@ public class CampaignService {
     private final EmailJobRepository emailJobRepository;
     private final ContactRepository contactRepository;
     private final UserRepository userRepository;
+    private final CampaignPlanRepository campaignPlanRepository;
 
     private boolean isAdmin(Authentication auth) {
         return auth != null && auth.getAuthorities().stream()
@@ -90,6 +91,8 @@ public class CampaignService {
         Campaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Campaign not found: " + id));
         checkAccess(campaign, auth);
+        // Null out any campaign plan reference to this campaign before deleting
+        campaignPlanRepository.clearResultCampaignById(id);
         campaignRepository.deleteById(id);
     }
 

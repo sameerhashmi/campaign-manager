@@ -253,7 +253,8 @@ export class CampaignListComponent implements OnInit {
   delete(c: Campaign): void {
     if (!confirm(`Delete campaign "${c.name}"? This cannot be undone.`)) return;
     this.campaignService.delete(c.id!).subscribe({
-      next: () => { this.snackBar.open('Campaign deleted', '', { duration: 3000 }); this.load(); }
+      next: () => { this.snackBar.open('Campaign deleted', '', { duration: 3000 }); this.load(); },
+      error: err => this.snackBar.open('Delete failed: ' + (err?.error?.message ?? err.message ?? 'Unknown error'), 'Close', { duration: 6000 })
     });
   }
 }

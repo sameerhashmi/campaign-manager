@@ -2,9 +2,6 @@
 /**
  * Standalone Gmail session capture script.
  *
- * Use this when you can't run the full Java app locally but need a
- * gmail-session.json to upload to a cloud deployment.
- *
  * Requirements (one-time setup):
  *   npm install playwright
  *   npx playwright install chromium
@@ -17,69 +14,136 @@
  */
 
 const { chromium } = require('playwright');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
-(async () => {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function setupKeyCapture(onEnter) {
+  if (!process.stdin.isTTY) return () => {};
+  try {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (key) => {
+      if (key === '\r' || key === '\n' || key === ' ') onEnter();
+      if (key === '\u0003') { console.log('\nAborted.'); process.exit(0); }
+    });
+  } catch (_) {}
+  return () => {
+    try { process.stdin.setRawMode(false); } catch (_) {}
+    process.stdin.pause();
+  };
+}
+
+async function main() {
   const outputDir  = path.join(__dirname, '..', 'data');
   const outputFile = path.join(outputDir, 'gmail-session.json');
-
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-  console.log('Opening Chrome — please log into Gmail...');
+  let manualCapture = false;
+  const releaseStdin = setupKeyCapture(() => { manualCapture = true; });
+
+  console.log('Opening Chrome — please log into Gmail...\n');
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
-  const page    = await context.newPage();
 
+  // Auto-close popup windows that aren't Gmail or Google login (e.g. Google Chat)
+  context.on('page', async (newPage) => {
+    try {
+      // Wait for the page to actually navigate away from about:blank
+      await newPage.waitForLoadState('domcontentloaded', { timeout: 5000 });
+      const url = newPage.url();
+      // Never close about: pages or Google login/Gmail pages
+      if (!url || url.startsWith('about:')) return;
+      if (url.includes('mail.google.com') || url.includes('accounts.google.com')) return;
+      // Close anything else (Chat, Meet, etc.)
+      console.log('\n  [auto-close popup] ' + url.substring(0, 80));
+      await newPage.close();
+    } catch (_) {}
+  });
+
+  const page = await context.newPage();
   await page.goto('https://mail.google.com');
 
-  console.log('Waiting for Gmail inbox (sign in and complete any 2-step verification)...');
-  console.log('The session will be captured automatically once you reach your inbox.\n');
+  console.log('──────────────────────────────────────────────────────');
+  console.log(' Sign in to Gmail in the browser that just opened.');
+  console.log(' Any Google Chat / Meet popups will be closed for you.');
+  console.log(' Session saves automatically once your inbox is visible.');
+  console.log(' Or press Enter / Space to capture manually at any time.');
+  console.log('──────────────────────────────────────────────────────\n');
 
-  // Poll every 2 seconds until we see a Gmail inbox indicator.
-  // Checks the URL (mail/u/ pattern) AND the presence of the compose button
-  // so we handle redirects, account pickers, and slow page loads.
-  const TIMEOUT_MS = 300_000; // 5 minutes
+  const inboxSelectors = [
+    '[gh="cm"]',
+    '[data-tooltip="Compose"]',
+    'div[role="main"]',
+    '.nH',
+    'div[data-view-id]',
+  ];
+
+  const TIMEOUT_MS = 300_000;
   const POLL_MS    = 2_000;
   const deadline   = Date.now() + TIMEOUT_MS;
   let captured     = false;
 
   while (Date.now() < deadline) {
-    await page.waitForTimeout(POLL_MS);
+    await sleep(POLL_MS);
 
-    const url = page.url();
-    const onGmail = url.includes('mail.google.com') &&
-                    (url.includes('/mail/u/') || url.includes('/mail/r/'));
-
-    let hasInbox = false;
-    if (onGmail) {
-      // Look for the compose button or the inbox label — reliable signals the inbox loaded
-      hasInbox = await page.locator('[gh="cm"], [data-tooltip="Compose"], div[role="navigation"]')
-                           .first()
-                           .isVisible({ timeout: 1000 })
-                           .catch(() => false);
-    }
-
-    if (onGmail && hasInbox) {
-      // Give the page a moment to settle all cookies
-      await page.waitForTimeout(2000);
-      const storageState = await context.storageState();
-      fs.writeFileSync(outputFile, JSON.stringify(storageState, null, 2));
+    if (manualCapture) {
+      process.stdout.write('\n');
+      console.log('Manual capture triggered — saving session...');
       captured = true;
       break;
     }
+
+    // Find the Gmail page (in case focus moved to another tab)
+    let gmailPage = null;
+    for (const p of context.pages()) {
+      try {
+        const u = p.url();
+        if (u.includes('mail.google.com')) { gmailPage = p; break; }
+      } catch (_) {}
+    }
+    if (!gmailPage) continue;
+
+    const url = gmailPage.url();
+    process.stdout.write('\r  URL: ' + url.substring(0, 72).padEnd(72));
+
+    // Bring Gmail to front so selectors are active
+    try { await gmailPage.bringToFront(); } catch (_) {}
+
+    for (const sel of inboxSelectors) {
+      try {
+        const visible = await gmailPage.locator(sel).first().isVisible({ timeout: 300 });
+        if (visible) {
+          process.stdout.write('\n');
+          console.log('Inbox detected — saving session...');
+          await sleep(2000);
+          captured = true;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    if (captured) break;
   }
 
-  await browser.close();
+  releaseStdin();
 
   if (captured) {
-    console.log('\nSession saved to: ' + outputFile);
-    console.log('\nNext step:');
-    console.log('  Go to your cloud app → Settings → Upload Session File');
-    console.log('  and upload: ' + outputFile + '\n');
+    const storageState = await context.storageState();
+    fs.writeFileSync(outputFile, JSON.stringify(storageState, null, 2));
+    await browser.close();
+    console.log('\n✓ Session saved to: ' + outputFile);
+    console.log('Next step: Settings → Upload Session File → upload that file\n');
   } else {
-    console.error('\nTimed out waiting for Gmail inbox. Please try again.');
-    console.error('Make sure you fully log in and reach your inbox before the 5-minute limit.\n');
+    await browser.close();
+    console.error('\n✗ Timed out. Please try again and log in within 5 minutes.');
     process.exit(1);
   }
-})();
+}
+
+main().catch((err) => {
+  console.error('\nError:', err.message || err);
+  process.exit(1);
+});
