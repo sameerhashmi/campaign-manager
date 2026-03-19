@@ -8,6 +8,7 @@ export interface CampaignPlan {
   customer?: string;
   tanzuContact?: string;
   driveFolderUrl?: string;
+  gmailEmail?: string;
   emailFormat?: string;
   contactGemId?: number;
   contactGemName?: string;

@@ -19,6 +19,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { GemService, Gem } from '../../../services/gem.service';
 import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, CampaignPlanSummary, CampaignPlanDocument } from '../../../services/campaign-plan.service';
+import { SettingsService, ConnectedSession } from '../../../services/settings.service';
 
 @Component({
   selector: 'app-campaign-plan-wizard',
@@ -76,13 +77,20 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                         </mat-form-field>
 
                         <mat-form-field appearance="outline" class="full-width">
-                          <mat-label>Tanzu Specialist (optional)</mat-label>
-                          <input matInput formControlName="tanzuContact" placeholder="e.g. Brian Smith">
-                          <mat-hint>Internal VMware/Tanzu contact for this campaign</mat-hint>
+                          <mat-label>Send From (Gmail Account)</mat-label>
+                          <mat-select formControlName="gmailEmail">
+                            @if (gmailSessions.length === 0) {
+                              <mat-option disabled>No Gmail accounts connected — go to Settings</mat-option>
+                            }
+                            @for (s of gmailSessions; track s.email) {
+                              <mat-option [value]="s.email">{{ s.email }}</mat-option>
+                            }
+                          </mat-select>
+                          <mat-hint>Gmail account used to send emails for this campaign.</mat-hint>
                         </mat-form-field>
 
                         <mat-form-field appearance="outline" class="full-width">
-                          <mat-label>Email Format (optional)</mat-label>
+                          <mat-label>Email Format</mat-label>
                           <input matInput formControlName="emailFormat"
                                  placeholder="e.g. firstname.lastname@broadcom.com">
                           <mat-hint>Auto-fills contact emails. Use firstname, lastname, or flastname patterns.</mat-hint>
@@ -400,11 +408,15 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                         @if (activeContact) {
                           <div class="email-recipient">
                             <mat-icon>person</mat-icon>
-                            <div>
+                            <div class="recipient-fields">
                               <span class="recipient-name">{{ activeContact.name }}</span>
-                              @if (activeContact.email) {
-                                <span class="recipient-email">&lt;{{ activeContact.email }}&gt;</span>
-                              }
+                              <mat-form-field appearance="outline" class="recipient-email-field">
+                                <mat-label>Email address</mat-label>
+                                <input matInput [(ngModel)]="activeContact.email"
+                                       (blur)="saveContactEmail(activeContact)"
+                                       placeholder="email@company.com">
+                                <mat-icon matSuffix>edit</mat-icon>
+                              </mat-form-field>
                             </div>
                           </div>
                         }
@@ -431,9 +443,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
 
               <div class="step-actions">
                 <button mat-stroked-button (click)="cancel()">Cancel</button>
-                <button mat-stroked-button matStepperPrevious>
-                  <mat-icon>arrow_back</mat-icon> Back
-                </button>
                 <button mat-raised-button color="primary"
                         [disabled]="generatingEmails"
                         (click)="goToStep4(stepper)">
@@ -490,15 +499,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
 
                   <!-- Details -->
                   <div class="summary-details">
-                    @if (summary.tanzuContact) {
-                      <div class="detail-row">
-                        <mat-icon class="detail-icon">person</mat-icon>
-                        <div>
-                          <div class="detail-label">Tanzu Specialist</div>
-                          <div class="detail-value">{{ summary.tanzuContact }}</div>
-                        </div>
-                      </div>
-                    }
                     <div class="detail-row">
                       <mat-icon class="detail-icon">auto_awesome</mat-icon>
                       <div>
@@ -649,13 +649,14 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       mat-icon { font-size: 16px; width: 16px; height: 16px; }
     }
     .email-recipient {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; align-items: flex-start; gap: 10px;
       padding: 10px 14px; background: #f8f9fa; border-radius: 8px;
       border: 1px solid #e0e0e0;
-      mat-icon { color: #5f6368; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+      mat-icon { color: #5f6368; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; margin-top: 10px; }
     }
+    .recipient-fields { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
     .recipient-name { font-size: 13px; font-weight: 600; color: #202124; }
-    .recipient-email { font-size: 12px; color: #1a73e8; margin-left: 6px; }
+    .recipient-email-field { width: 100%; margin-top: 4px; }
 
     /* Step 1 card — two-column layout */
     .step1-card { max-width: 1040px; }
@@ -775,6 +776,7 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   step1Form!: FormGroup;
   contactGems: Gem[] = [];
   emailGems: Gem[] = [];
+  gmailSessions: ConnectedSession[] = [];
   geminiConnected = false;
 
   planId: number | null = null;
@@ -811,6 +813,7 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
     private fb: FormBuilder,
     private gemService: GemService,
     private planService: CampaignPlanService,
+    private settingsService: SettingsService,
     private router: Router,
     private route: ActivatedRoute,
     private snackBar: MatSnackBar
@@ -820,13 +823,14 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
     this.step1Form = this.fb.group({
       name: ['', Validators.required],
       customer: ['', Validators.required],
-      tanzuContact: [''],
+      gmailEmail: [null],
       contactGemId: [null, Validators.required],
       emailGemId: [null, Validators.required],
-      emailFormat: ['']
+      emailFormat: ['firstname.lastname@company.com']
     });
 
     this.loadGems();
+    this.loadGmailSessions();
     this.checkGeminiStatus();
 
     const planId = this.route.snapshot.paramMap.get('planId');
@@ -839,6 +843,13 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   loadGems(): void {
     this.gemService.getByType('CONTACT_RESEARCH').subscribe(g => this.contactGems = g);
     this.gemService.getByType('EMAIL_GENERATION').subscribe(g => this.emailGems = g);
+  }
+
+  loadGmailSessions(): void {
+    this.settingsService.getSessions().subscribe({
+      next: sessions => this.gmailSessions = sessions,
+      error: () => this.gmailSessions = []
+    });
   }
 
   checkGeminiStatus(): void {
@@ -855,10 +866,10 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
       this.step1Form.patchValue({
         name: plan.name,
         customer: plan.customer,
-        tanzuContact: plan.tanzuContact,
+        gmailEmail: plan.gmailEmail,
         contactGemId: plan.contactGemId,
         emailGemId: plan.emailGemId,
-        emailFormat: plan.emailFormat
+        emailFormat: plan.emailFormat || 'firstname.lastname@company.com'
       });
     });
     this.planService.getDocuments(id).subscribe(docs => this.uploadedDocs = docs);
@@ -1134,6 +1145,13 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   selectEmail(email: GeneratedEmail): void {
     this.activeEmailId = email.id ?? null;
     this.activeEmail = { ...email };
+  }
+
+  saveContactEmail(contact: ProspectContact): void {
+    if (!this.planId || !contact.id) return;
+    this.planService.updateContact(this.planId, contact.id, contact).subscribe({
+      error: () => this.snackBar.open('Failed to save email address', 'Close', { duration: 4000 })
+    });
   }
 
   saveEmail(email: GeneratedEmail): void {

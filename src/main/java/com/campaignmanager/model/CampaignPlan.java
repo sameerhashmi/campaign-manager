@@ -33,6 +33,9 @@ public class CampaignPlan {
     @Column(name = "drive_folder_url", length = 2048)
     private String driveFolderUrl;
 
+    @Column(name = "gmail_email")
+    private String gmailEmail;
+
     @Column(name = "email_format")
     private String emailFormat;
 

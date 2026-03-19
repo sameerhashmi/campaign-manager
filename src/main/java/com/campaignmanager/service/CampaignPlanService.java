@@ -274,6 +274,7 @@ public class CampaignPlanService {
         campaign.setName(plan.getName());
         campaign.setCompany(plan.getCustomer());
         campaign.setTanzuContact(plan.getTanzuContact());
+        campaign.setGmailEmail(plan.getGmailEmail());
         campaign.setOwner(owner);
         campaign.setStatus(CampaignStatus.DRAFT);
         campaign = campaignRepository.save(campaign);
@@ -375,6 +376,7 @@ public class CampaignPlanService {
         dto.setCustomer(plan.getCustomer());
         dto.setTanzuContact(plan.getTanzuContact());
         dto.setDriveFolderUrl(plan.getDriveFolderUrl());
+        dto.setGmailEmail(plan.getGmailEmail());
         dto.setEmailFormat(plan.getEmailFormat());
         dto.setStatus(plan.getStatus());
         dto.setEmailError(emailErrors.get(plan.getId()));
@@ -431,6 +433,7 @@ public class CampaignPlanService {
         plan.setCustomer(dto.getCustomer());
         plan.setTanzuContact(dto.getTanzuContact());
         plan.setDriveFolderUrl(dto.getDriveFolderUrl());
+        plan.setGmailEmail(dto.getGmailEmail());
         plan.setEmailFormat(dto.getEmailFormat());
         if (dto.getContactGemId() != null) {
             gemRepository.findByIdAndOwner(dto.getContactGemId(), owner)
