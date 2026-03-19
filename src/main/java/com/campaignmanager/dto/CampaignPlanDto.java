@@ -11,6 +11,7 @@ public class CampaignPlanDto {
     private String customer;
     private String tanzuContact;
     private String driveFolderUrl;
+    private String emailFormat;
     private Long contactGemId;
     private String contactGemName;
     private Long emailGemId;

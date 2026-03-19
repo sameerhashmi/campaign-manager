@@ -3,24 +3,23 @@ package com.campaignmanager.service;
 import com.campaignmanager.model.CampaignPlan;
 import com.campaignmanager.model.CampaignPlanDocument;
 import com.campaignmanager.repository.CampaignPlanDocumentRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Downloads files from a Google Drive folder using the connected Gmail/Google session
- * (same Playwright-based auth as Google Sheets import in Campaign 1.0).
- * The folder must be accessible to the connected Gmail account — no public sharing required.
+ * Downloads files from a Google Drive folder using the connected Gmail/Google session.
+ * Uses ctx.request().get() (same pattern as ExcelImportService's Google Sheets download)
+ * rather than page.navigate() — avoids the ERR_CONNECTION_RESET that full browser
+ * navigation triggers on CF's corporate proxy.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,7 +29,6 @@ public class GoogleDriveImportService {
     private static final long MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB per file
 
     private final PlaywrightSessionService sessionService;
-    private final ObjectMapper objectMapper;
     private final CampaignPlanDocumentRepository documentRepository;
 
     /**
@@ -51,160 +49,167 @@ public class GoogleDriveImportService {
      */
     public List<CampaignPlanDocument> importFolder(String folderId, CampaignPlan plan) {
         BrowserContext ctx = sessionService.getSessionContext();
-        Page page = ctx.newPage();
         List<CampaignPlanDocument> created = new ArrayList<>();
 
-        try {
-            // Navigate to the folder to trigger Google auth and load file metadata
-            String folderUrl = "https://drive.google.com/drive/folders/" + folderId;
-            log.info("Navigating to Drive folder: {}", folderUrl);
-            page.navigate(folderUrl);
-            page.waitForLoadState(com.microsoft.playwright.options.LoadState.NETWORKIDLE,
-                    new Page.WaitForLoadStateOptions().setTimeout(30_000));
-            // Give the Drive SPA a moment to finish rendering file rows
-            page.waitForTimeout(3_000);
+        // ── Step 1: Fetch the folder page HTML via HTTP request (not browser nav) ──
+        // This mirrors how ExcelImportService downloads Google Sheets — ctx.request().get()
+        // uses an HTTP client that works through CF's proxy, unlike page.navigate() which
+        // triggers ERR_CONNECTION_RESET on drive.google.com.
+        String folderUrl = "https://drive.google.com/drive/folders/" + folderId;
+        log.info("Fetching Drive folder via HTTP: {}", folderUrl);
 
-            // Extract file IDs and names from the DOM using multiple selector strategies
-            String script = """
-                (() => {
-                    const files = new Map();
-                    // Strategy 1: [data-id] elements — Drive list/grid view file entries
-                    document.querySelectorAll('[data-id]').forEach(el => {
-                        const id = el.getAttribute('data-id');
-                        if (!id || !/^[a-zA-Z0-9_\\-]{20,}$/.test(id)) return;
-                        const name =
-                            el.getAttribute('data-filename') ||
-                            el.querySelector('[data-filename]')?.getAttribute('data-filename') ||
-                            el.querySelector('[data-tooltip]')?.getAttribute('data-tooltip') ||
-                            el.querySelector('[title]')?.getAttribute('title') ||
-                            el.querySelector('div[tabindex]')?.textContent?.trim() || '';
-                        if (name && name.length > 0 && !name.includes('\\n') && name.length < 256) {
-                            files.set(id, { id, name });
-                        }
-                    });
-                    // Strategy 2: anchor hrefs in file rows
-                    document.querySelectorAll('a[href*="/file/d/"], a[href*="/document/d/"], a[href*="/presentation/d/"]').forEach(a => {
-                        const href = a.getAttribute('href') || '';
-                        const m = href.match(/\\/(?:file|document|presentation)\\/d\\/([a-zA-Z0-9_\\-]{20,})/);
-                        if (!m) return;
-                        const id = m[1];
-                        const name = a.getAttribute('aria-label') || a.textContent.trim();
-                        if (name && !files.has(id)) files.set(id, { id, name });
-                    });
-                    return JSON.stringify(Array.from(files.values()));
-                })()
-            """;
+        APIResponse folderResp = ctx.request().get(folderUrl);
+        if (!folderResp.ok()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "Could not access Drive folder (HTTP " + folderResp.status() + "). " +
+                "Make sure the folder is shared with your connected Gmail account.");
+        }
+        String html = folderResp.text();
+        log.debug("Drive folder HTML length: {}", html.length());
 
-            String json = (String) page.evaluate(script);
-            log.info("Drive folder DOM extracted: {}", json);
+        // ── Step 2: Extract file IDs from the HTML ──
+        // Drive embeds file IDs in several places in the raw HTML:
+        //   - As /file/d/ID, /document/d/ID, /presentation/d/ID URL patterns
+        //   - As /open?id=ID patterns
+        //   - As "id":"ID" in embedded JSON
+        Set<String> fileIds = extractFileIds(html, folderId);
+        log.info("Drive folder HTML extracted {} candidate file IDs", fileIds.size());
 
-            if (json == null || json.equals("[]") || json.equals("null")) {
-                throw new RuntimeException(
-                    "No files found in the Drive folder. Make sure: (1) the folder URL is correct, " +
-                    "(2) the folder is shared with the connected Gmail account, and " +
-                    "(3) it contains supported files (Google Docs, PDF, DOCX, TXT, HTML).");
-            }
+        if (fileIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                "No files found in the Drive folder. Make sure: (1) the folder URL is correct, " +
+                "(2) the folder is shared with the connected Gmail account, and " +
+                "(3) it contains supported files (Google Docs, PDF, DOCX, TXT, HTML).");
+        }
 
-            JsonNode fileArray = objectMapper.readTree(json);
-            if (!fileArray.isArray() || fileArray.size() == 0) {
-                throw new RuntimeException("Drive folder appears empty or inaccessible to the connected Gmail account.");
-            }
+        // ── Step 3: Download each file ──
+        for (String fileId : fileIds) {
+            try {
+                byte[] content = null;
+                String effectiveMime = "application/octet-stream";
+                String effectiveName = fileId;
 
-            // Download each file using the authenticated session
-            for (JsonNode fileNode : fileArray) {
-                String fileId = fileNode.path("id").asText();
-                String name   = fileNode.path("name").asText("unknown");
-                if (fileId.isBlank()) continue;
-
-                try {
-                    byte[] content = null;
-                    String effectiveMime = "application/octet-stream";
-                    String effectiveName = name;
-
-                    // Determine download URL based on file name extension or guessing
-                    if (looksLikeGoogleDoc(name)) {
-                        // Google Doc — export as plain text
-                        String exportUrl = "https://docs.google.com/document/d/" + fileId + "/export?format=txt";
-                        APIResponse resp = ctx.request().get(exportUrl);
-                        if (resp.ok()) {
-                            content = resp.body();
-                            effectiveMime = "text/plain";
-                            effectiveName = stripExtension(name) + ".txt";
-                        } else {
-                            log.warn("Doc export failed for '{}' (HTTP {}), trying direct download", name, resp.status());
-                        }
-                    }
-
-                    if (content == null && looksLikeGoogleSlides(name)) {
-                        // Google Slides — export as plain text
-                        String exportUrl = "https://docs.google.com/presentation/d/" + fileId + "/export/txt";
-                        APIResponse resp = ctx.request().get(exportUrl);
-                        if (resp.ok()) {
-                            content = resp.body();
-                            effectiveMime = "text/plain";
-                            effectiveName = stripExtension(name) + ".txt";
-                        }
-                    }
-
-                    if (content == null) {
-                        // Regular file — try direct download via Drive's uc endpoint
-                        String downloadUrl = "https://drive.google.com/uc?id=" + fileId + "&export=download";
-                        APIResponse resp = ctx.request().get(downloadUrl);
-                        if (resp.ok()) {
-                            content = resp.body();
-                            // Detect mime from content-type or name extension
-                            String ct = resp.headers().getOrDefault("content-type", "application/octet-stream");
-                            effectiveMime = ct.contains(";") ? ct.substring(0, ct.indexOf(';')).trim() : ct;
-                        } else {
-                            log.warn("Skipping '{}' — could not download (HTTP {})", name, resp.status());
-                            continue;
-                        }
-                    }
-
-                    if (content == null || content.length == 0) {
-                        log.warn("Empty content for file '{}', skipping", name);
-                        continue;
-                    }
-                    if (content.length > MAX_FILE_BYTES) {
-                        log.warn("Skipping '{}' — too large ({} bytes)", name, content.length);
-                        continue;
-                    }
-                    if (!isSupportedMime(effectiveMime) && !isSupportedByExtension(effectiveName)) {
-                        log.debug("Skipping '{}' — unsupported type ({})", effectiveName, effectiveMime);
-                        continue;
-                    }
-
-                    CampaignPlanDocument doc = new CampaignPlanDocument();
-                    doc.setCampaignPlan(plan);
-                    doc.setOriginalFileName(effectiveName);
-                    doc.setMimeType(effectiveMime);
-                    doc.setFileContent(content);
-                    created.add(documentRepository.save(doc));
-                    log.info("Imported '{}' ({} bytes) from Drive folder", effectiveName, content.length);
-
-                } catch (Exception e) {
-                    log.warn("Failed to download '{}' from Drive: {}", name, e.getMessage());
+                // Try Google Doc export first
+                String docExport = "https://docs.google.com/document/d/" + fileId + "/export?format=txt";
+                APIResponse resp = ctx.request().get(docExport);
+                if (resp.ok() && resp.body().length > 0) {
+                    content = resp.body();
+                    effectiveMime = "text/plain";
+                    effectiveName = fileId + ".txt";
+                    log.info("Imported Google Doc {} as text ({} bytes)", fileId, content.length);
                 }
-            }
 
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("Drive folder import failed: " + e.getMessage(), e);
-        } finally {
-            page.close();
+                // Try Google Slides export
+                if (content == null) {
+                    String slidesExport = "https://docs.google.com/presentation/d/" + fileId + "/export/txt";
+                    resp = ctx.request().get(slidesExport);
+                    if (resp.ok() && resp.body().length > 0) {
+                        content = resp.body();
+                        effectiveMime = "text/plain";
+                        effectiveName = fileId + ".txt";
+                        log.info("Imported Google Slides {} as text ({} bytes)", fileId, content.length);
+                    }
+                }
+
+                // Try Drive usercontent download (works for PDF, DOCX, etc.)
+                if (content == null) {
+                    String dlUrl = "https://drive.usercontent.google.com/download?id=" + fileId +
+                                   "&export=download&authuser=0";
+                    resp = ctx.request().get(dlUrl);
+                    if (resp.ok() && resp.body().length > 0) {
+                        content = resp.body();
+                        String ct = resp.headers().getOrDefault("content-type", "application/octet-stream");
+                        effectiveMime = ct.contains(";") ? ct.substring(0, ct.indexOf(';')).trim() : ct;
+                        // Try to get filename from Content-Disposition
+                        String cd = resp.headers().getOrDefault("content-disposition", "");
+                        effectiveName = extractFilename(cd, fileId, effectiveMime);
+                        log.info("Imported file {} ({} bytes, {})", effectiveName, content.length, effectiveMime);
+                    }
+                }
+
+                // Fallback: classic Drive uc endpoint
+                if (content == null) {
+                    String ucUrl = "https://drive.google.com/uc?id=" + fileId + "&export=download";
+                    resp = ctx.request().get(ucUrl);
+                    if (resp.ok() && resp.body().length > 0) {
+                        content = resp.body();
+                        String ct = resp.headers().getOrDefault("content-type", "application/octet-stream");
+                        effectiveMime = ct.contains(";") ? ct.substring(0, ct.indexOf(';')).trim() : ct;
+                        String cd = resp.headers().getOrDefault("content-disposition", "");
+                        effectiveName = extractFilename(cd, fileId, effectiveMime);
+                        log.info("Imported file {} via uc ({} bytes)", effectiveName, content.length);
+                    }
+                }
+
+                if (content == null || content.length == 0) {
+                    log.debug("Skipping {} — could not download via any method", fileId);
+                    continue;
+                }
+                if (content.length > MAX_FILE_BYTES) {
+                    log.warn("Skipping {} — too large ({} bytes)", effectiveName, content.length);
+                    continue;
+                }
+                if (!isSupportedMime(effectiveMime) && !isSupportedByExtension(effectiveName)) {
+                    log.debug("Skipping {} — unsupported type ({})", effectiveName, effectiveMime);
+                    continue;
+                }
+
+                CampaignPlanDocument doc = new CampaignPlanDocument();
+                doc.setCampaignPlan(plan);
+                doc.setOriginalFileName(effectiveName);
+                doc.setMimeType(effectiveMime);
+                doc.setFileContent(content);
+                created.add(documentRepository.save(doc));
+
+            } catch (Exception e) {
+                log.warn("Failed to download file {} from Drive: {}", fileId, e.getMessage());
+            }
         }
 
         return created;
     }
 
-    private boolean looksLikeGoogleDoc(String name) {
-        // No extension → likely a Google Doc
-        return !name.contains(".") || name.endsWith(".gdoc");
+    /**
+     * Extracts Drive file IDs from a folder page HTML response.
+     * Looks for /file/d/ID, /document/d/ID, /open?id=ID, and "id":"ID" patterns.
+     * Excludes the folder ID itself.
+     */
+    private Set<String> extractFileIds(String html, String folderId) {
+        Set<String> ids = new LinkedHashSet<>();
+        // Pattern 1: /file/d/ID, /document/d/ID, /presentation/d/ID in URLs
+        Matcher m1 = Pattern.compile("/(?:file|document|presentation|spreadsheets)/d/([a-zA-Z0-9_-]{25,})").matcher(html);
+        while (m1.find()) ids.add(m1.group(1));
+
+        // Pattern 2: /open?id=ID or ?id=ID&
+        Matcher m2 = Pattern.compile("[?&]id=([a-zA-Z0-9_-]{25,})").matcher(html);
+        while (m2.find()) ids.add(m2.group(1));
+
+        // Pattern 3: "id":"ID" in embedded JSON
+        Matcher m3 = Pattern.compile("\"id\"\\s*:\\s*\"([a-zA-Z0-9_-]{25,})\"").matcher(html);
+        while (m3.find()) ids.add(m3.group(1));
+
+        // Pattern 4: bare IDs in data-id attributes
+        Matcher m4 = Pattern.compile("data-id=\"([a-zA-Z0-9_-]{25,})\"").matcher(html);
+        while (m4.find()) ids.add(m4.group(1));
+
+        ids.remove(folderId); // don't try to download the folder itself
+        return ids;
     }
 
-    private boolean looksLikeGoogleSlides(String name) {
-        return name.endsWith(".gslides");
+    private String extractFilename(String contentDisposition, String fallbackId, String mime) {
+        if (contentDisposition != null) {
+            Matcher m = Pattern.compile("filename[^;=\\n]*=(['\"]?)([^'\"\\n;]+)\\1").matcher(contentDisposition);
+            if (m.find()) return m.group(2).trim();
+            m = Pattern.compile("filename\\*=UTF-8''([^\\s;]+)").matcher(contentDisposition);
+            if (m.find()) return java.net.URLDecoder.decode(m.group(1), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        // Derive extension from MIME
+        String ext = mime.contains("pdf") ? ".pdf"
+                   : mime.contains("wordprocessingml") ? ".docx"
+                   : mime.contains("html") ? ".html"
+                   : mime.startsWith("text/") ? ".txt"
+                   : "";
+        return fallbackId + ext;
     }
 
     private boolean isSupportedMime(String mime) {
@@ -218,10 +223,5 @@ public class GoogleDriveImportService {
         String lower = name.toLowerCase();
         return lower.endsWith(".pdf") || lower.endsWith(".docx") ||
                lower.endsWith(".txt") || lower.endsWith(".html") || lower.endsWith(".htm");
-    }
-
-    private String stripExtension(String name) {
-        int dot = name.lastIndexOf('.');
-        return dot > 0 ? name.substring(0, dot) : name;
     }
 }

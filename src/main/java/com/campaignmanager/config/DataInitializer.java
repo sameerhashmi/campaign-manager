@@ -34,6 +34,7 @@ public class DataInitializer implements CommandLineRunner {
         migrateOwnerColumns();
         migrateClientBriefingsFileContent();
         migrateCampaignPlanDocuments();
+        migrateCampaignPlanEmailFormat();
     }
 
     /**
@@ -147,6 +148,19 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Added file_content column to client_briefings");
         } catch (Exception e) {
             log.debug("client_briefings.file_content already exists or skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Adds email_format column to campaign_plans if it doesn't exist.
+     */
+    private void migrateCampaignPlanEmailFormat() {
+        try {
+            jdbcTemplate.execute(
+                "ALTER TABLE campaign_plans ADD COLUMN IF NOT EXISTS email_format VARCHAR(255)");
+            log.info("Added email_format column to campaign_plans");
+        } catch (Exception e) {
+            log.debug("campaign_plans.email_format already exists or skipped: {}", e.getMessage());
         }
     }
 

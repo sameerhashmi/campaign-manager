@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -120,6 +121,16 @@ public class CampaignPlanService {
                 geminiSettings.getModel(),
                 plan.getContactGem().getSystemInstructions(),
                 corpus);
+
+        // Apply email format to contacts that have no email
+        String emailFormat = plan.getEmailFormat();
+        if (emailFormat != null && !emailFormat.isBlank()) {
+            generated.forEach(dto -> {
+                if (dto.getEmail() == null || dto.getEmail().isBlank()) {
+                    dto.setEmail(applyEmailFormat(emailFormat, dto.getName()));
+                }
+            });
+        }
 
         List<ProspectContact> saved = generated.stream().map(dto -> {
             ProspectContact pc = new ProspectContact();
@@ -387,6 +398,7 @@ public class CampaignPlanService {
         dto.setCustomer(plan.getCustomer());
         dto.setTanzuContact(plan.getTanzuContact());
         dto.setDriveFolderUrl(plan.getDriveFolderUrl());
+        dto.setEmailFormat(plan.getEmailFormat());
         dto.setStatus(plan.getStatus());
         dto.setCreatedAt(plan.getCreatedAt());
         if (plan.getContactGem() != null) {
@@ -441,6 +453,7 @@ public class CampaignPlanService {
         plan.setCustomer(dto.getCustomer());
         plan.setTanzuContact(dto.getTanzuContact());
         plan.setDriveFolderUrl(dto.getDriveFolderUrl());
+        plan.setEmailFormat(dto.getEmailFormat());
         if (dto.getContactGemId() != null) {
             gemRepository.findByIdAndOwner(dto.getContactGemId(), owner)
                     .ifPresent(plan::setContactGem);
@@ -493,6 +506,36 @@ public class CampaignPlanService {
 
     private String requireApiKey(Authentication auth) {
         return requireGeminiSettings(auth).getApiKey();
+    }
+
+    /**
+     * Derives an email address from a full name and a format string.
+     * Supported tokens: firstname, lastname, flastname, f.lastname
+     * Examples:
+     *   "firstname.lastname@broadcom.com" + "John Smith" → "john.smith@broadcom.com"
+     *   "flastname@broadcom.com"          + "John Smith" → "jsmith@broadcom.com"
+     *   "f.lastname@broadcom.com"         + "John Smith" → "j.smith@broadcom.com"
+     */
+    private String applyEmailFormat(String format, String fullName) {
+        if (format == null || format.isBlank() || fullName == null || fullName.isBlank()) return "";
+        String[] parts = fullName.trim().split("\\s+", 2);
+        String first = parts[0].toLowerCase().replaceAll("[^a-z0-9]", "");
+        String last = parts.length > 1 ? parts[1].toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+        String fi = first.isEmpty() ? "" : String.valueOf(first.charAt(0));
+
+        int atIdx = format.indexOf('@');
+        String local = (atIdx > 0 ? format.substring(0, atIdx) : format).toLowerCase();
+        String domain = atIdx > 0 ? format.substring(atIdx) : "@company.com";
+
+        // Handle "f" + separator + "lastname" token before replacing lastname (e.g., "f.lastname")
+        if (!fi.isEmpty() && !last.isEmpty()) {
+            local = local.replace("f.lastname", fi + "." + last)
+                         .replace("flastname", fi + last);
+        }
+        // Replace remaining full-name tokens
+        local = local.replace("firstname", first).replace("lastname", last);
+
+        return local + domain;
     }
 
     // ─── Document Management ──────────────────────────────────────────────────

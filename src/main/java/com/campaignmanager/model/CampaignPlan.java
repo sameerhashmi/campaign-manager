@@ -33,6 +33,9 @@ public class CampaignPlan {
     @Column(name = "drive_folder_url", length = 2048)
     private String driveFolderUrl;
 
+    @Column(name = "email_format")
+    private String emailFormat;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contact_gem_id")
     @ToString.Exclude

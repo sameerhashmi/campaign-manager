@@ -101,6 +101,13 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                       </mat-select>
                       <mat-hint>Generates 7 personalized emails per selected contact.</mat-hint>
                     </mat-form-field>
+
+                    <mat-form-field appearance="outline" class="full-width">
+                      <mat-label>Email Format (optional)</mat-label>
+                      <input matInput formControlName="emailFormat"
+                             placeholder="e.g. firstname.lastname@broadcom.com">
+                      <mat-hint>Auto-fills contact emails. Use firstname, lastname, or flastname patterns.</mat-hint>
+                    </mat-form-field>
                   </form>
 
                   <mat-divider style="margin: 16px 0"></mat-divider>
@@ -239,8 +246,13 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                   </div>
                 </div>
               } @else {
+                <div class="edit-tip">
+                  <mat-icon>edit</mat-icon>
+                  Click any cell to edit inline. Emails are auto-generated from your format — update them here if needed.
+                </div>
+
                 <div class="table-toolbar">
-                  <p class="step-desc">{{ contacts.length }} contact(s) found. Edit inline, then select who to include.</p>
+                  <p class="step-desc">{{ contacts.length }} contact(s) found. Select who to include.</p>
                   <div class="toolbar-actions">
                     <button mat-stroked-button (click)="selectAll()">Select All</button>
                     <button mat-stroked-button (click)="deselectAll()">Deselect All</button>
@@ -645,6 +657,12 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       &.pending { background: #e8f0fe; mat-icon.doc-icon { color: #1a73e8; } }
     }
     .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .edit-tip {
+      display: flex; align-items: center; gap: 8px;
+      background: #e8f0fe; padding: 10px 14px; border-radius: 8px;
+      font-size: 13px; color: #3c4043; margin-bottom: 8px;
+      mat-icon { font-size: 16px; width: 16px; height: 16px; color: #1a73e8; flex-shrink: 0; }
+    }
 
     /* Summary */
     .summary-card { max-width: 520px; margin-bottom: 16px; }
@@ -706,7 +724,8 @@ export class CampaignPlanWizardComponent implements OnInit {
       customer: ['', Validators.required],
       tanzuContact: [''],
       contactGemId: [null, Validators.required],
-      emailGemId: [null, Validators.required]
+      emailGemId: [null, Validators.required],
+      emailFormat: ['']
     });
 
     this.loadGems();
@@ -740,7 +759,8 @@ export class CampaignPlanWizardComponent implements OnInit {
         customer: plan.customer,
         tanzuContact: plan.tanzuContact,
         contactGemId: plan.contactGemId,
-        emailGemId: plan.emailGemId
+        emailGemId: plan.emailGemId,
+        emailFormat: plan.emailFormat
       });
     });
     this.planService.getDocuments(id).subscribe(docs => this.uploadedDocs = docs);
