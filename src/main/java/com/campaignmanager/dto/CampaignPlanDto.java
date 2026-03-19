@@ -17,6 +17,7 @@ public class CampaignPlanDto {
     private Long emailGemId;
     private String emailGemName;
     private String status;
+    private String emailError;
     private Long resultCampaignId;
     private LocalDateTime createdAt;
 }

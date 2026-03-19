@@ -14,6 +14,7 @@ export interface CampaignPlan {
   emailGemId?: number;
   emailGemName?: string;
   status?: string;
+  emailError?: string;
   resultCampaignId?: number;
   createdAt?: string;
 }
@@ -102,8 +103,8 @@ export class CampaignPlanService {
     return this.http.put<ProspectContact>(`${this.base}/${planId}/contacts/${contactId}`, contact);
   }
 
-  generateEmails(planId: number, selectedContactIds: number[]): Observable<{ [key: number]: GeneratedEmail[] }> {
-    return this.http.post<{ [key: number]: GeneratedEmail[] }>(
+  generateEmails(planId: number, selectedContactIds: number[]): Observable<{ status: string }> {
+    return this.http.post<{ status: string }>(
       `${this.base}/${planId}/generate-emails`,
       { selectedContactIds }
     );

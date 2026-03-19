@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -43,6 +44,9 @@ public class CampaignPlanService {
     private final CampaignPlanDocumentRepository documentRepository;
     private final DocumentTextExtractorService documentTextExtractorService;
     private final GoogleDriveImportService googleDriveImportService;
+    private final EmailGenerationAsyncWorker emailWorker;
+
+    private final ConcurrentHashMap<Long, String> emailErrors = new ConcurrentHashMap<>();
 
     private static final DateTimeFormatter DISPLAY_FMT =
             DateTimeFormatter.ofPattern("EEE, MMM d, yyyy");
@@ -157,11 +161,10 @@ public class CampaignPlanService {
         return toProspectDto(prospectContactRepository.save(pc));
     }
 
-    // ─── Generate Emails ─────────────────────────────────────────────────────
+    // ─── Generate Emails (async) ──────────────────────────────────────────────
 
-    public Map<Long, List<GeneratedEmailDto>> generateEmails(Long planId,
-                                                             List<Long> selectedContactIds,
-                                                             Authentication auth) {
+    @Transactional
+    public void startEmailGeneration(Long planId, List<Long> selectedContactIds, Authentication auth) {
         CampaignPlan plan = resolvePlan(planId, auth);
         UserGeminiSettings geminiSettings = requireGeminiSettings(auth);
 
@@ -170,7 +173,7 @@ public class CampaignPlanService {
                     "No Email Generation Gem selected.");
         }
 
-        // Mark selected contacts and clear old emails
+        // Mark selected contacts and clear old emails — all synchronous before we return
         List<ProspectContact> allContacts = prospectContactRepository.findAllByCampaignPlanOrderByName(plan);
         List<ProspectContact> selected = new ArrayList<>();
         for (ProspectContact pc : allContacts) {
@@ -183,52 +186,26 @@ public class CampaignPlanService {
             }
         }
 
+        // Snapshot all data needed by the async thread (no JPA proxies, no SecurityContext)
+        List<ProspectContactDto> contactDtos = selected.stream().map(this::toProspectDto).collect(Collectors.toList());
+        List<Long> contactIds = selected.stream().map(ProspectContact::getId).collect(Collectors.toList());
         List<LocalDateTime> schedule = EmailScheduleCalculator.calculateSchedule(LocalDate.now());
-
-        // Load document corpus once
         List<CampaignPlanDocument> docs = documentRepository.findAllByCampaignPlan(plan);
         String corpus = documentTextExtractorService.extractAll(docs);
-        String emailSystemInstructions = plan.getEmailGem().getSystemInstructions();
         String apiKey = geminiSettings.getApiKey();
         String model = geminiSettings.getModel();
+        String systemInstructions = plan.getEmailGem().getSystemInstructions();
 
-        // Call Gemini for all contacts in parallel to stay within HTTP timeout
-        Map<Long, CompletableFuture<List<GeneratedEmailDto>>> futures = new LinkedHashMap<>();
-        for (ProspectContact pc : selected) {
-            ProspectContactDto contactDto = toProspectDto(pc);
-            futures.put(pc.getId(), CompletableFuture.supplyAsync(() ->
-                    geminiApiService.generateEmails(apiKey, model, emailSystemInstructions,
-                            contactDto, schedule, corpus)));
-        }
-
-        // Collect results and save to DB (75s timeout total)
-        Map<Long, List<GeneratedEmailDto>> result = new LinkedHashMap<>();
-        for (ProspectContact pc : selected) {
-            try {
-                List<GeneratedEmailDto> emails = futures.get(pc.getId()).get(75, TimeUnit.SECONDS);
-                List<GeneratedEmail> saved = emails.stream().map(dto -> {
-                    GeneratedEmail ge = new GeneratedEmail();
-                    ge.setProspectContact(pc);
-                    ge.setStepNumber(dto.getStepNumber());
-                    ge.setSubject(dto.getSubject());
-                    ge.setBody(dto.getBody());
-                    ge.setScheduledAt(dto.getScheduledAt() != null ? dto.getScheduledAt()
-                            : (dto.getStepNumber() <= schedule.size() ? schedule.get(dto.getStepNumber() - 1) : null));
-                    return generatedEmailRepository.save(ge);
-                }).collect(Collectors.toList());
-                result.put(pc.getId(), saved.stream().map(this::toEmailDto).collect(Collectors.toList()));
-            } catch (Exception e) {
-                log.error("Email generation failed for contact {}: {}", pc.getName(), e.getMessage());
-                Throwable cause = (e.getCause() != null) ? e.getCause() : e;
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Email generation failed for " + pc.getName() + ": " + cause.getMessage());
-            }
-        }
-
-        plan.setStatus("EMAILS_READY");
+        // Set processing status and clear any previous error
+        emailErrors.remove(planId);
+        plan.setStatus("GENERATING_EMAILS");
         planRepository.save(plan);
 
-        return result;
+        // Fire and forget — the worker runs in a Spring-managed async thread
+        emailWorker.process(planId, contactDtos, contactIds, apiKey, model,
+                systemInstructions, corpus, schedule, emailErrors);
+
+        log.info("Email generation started async for plan {} ({} contacts)", planId, selected.size());
     }
 
     // ─── Update Single Email ──────────────────────────────────────────────────
@@ -400,6 +377,7 @@ public class CampaignPlanService {
         dto.setDriveFolderUrl(plan.getDriveFolderUrl());
         dto.setEmailFormat(plan.getEmailFormat());
         dto.setStatus(plan.getStatus());
+        dto.setEmailError(emailErrors.get(plan.getId()));
         dto.setCreatedAt(plan.getCreatedAt());
         if (plan.getContactGem() != null) {
             dto.setContactGemId(plan.getContactGem().getId());

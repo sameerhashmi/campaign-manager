@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -770,7 +770,8 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
     }
   `]
 })
-export class CampaignPlanWizardComponent implements OnInit {
+export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
+  private emailPollInterval: any = null;
   step1Form!: FormGroup;
   contactGems: Gem[] = [];
   emailGems: Gem[] = [];
@@ -1051,21 +1052,67 @@ export class CampaignPlanWizardComponent implements OnInit {
     this.generatingEmails = true;
     this.emailGenError = null;
     this.emailsByContact = {};
+    this.stopEmailPoll();
 
+    // POST returns 202 immediately — then poll plan status
     this.planService.generateEmails(this.planId!, selected).subscribe({
-      next: result => {
-        this.emailsByContact = result;
-        this.generatingEmails = false;
-        stepper.selectedIndex = 2;
-        if (this.selectedContacts.length > 0) {
-          this.selectContact(this.selectedContacts[0]);
-        }
-      },
+      next: () => this.startEmailPoll(stepper),
       error: err => {
         this.generatingEmails = false;
-        this.emailGenError = err?.error?.message ?? 'Email generation failed. Check your API key, model selection, and Gem instructions.';
+        this.emailGenError = err?.error?.message ?? 'Email generation failed. Check your API key and Gem instructions.';
       }
     });
+  }
+
+  private startEmailPoll(stepper: any): void {
+    this.emailPollInterval = setInterval(() => {
+      this.planService.getById(this.planId!).subscribe({
+        next: plan => {
+          if (plan.status === 'EMAILS_READY') {
+            this.stopEmailPoll();
+            this.loadEmailsAndAdvance(stepper);
+          } else if (plan.status === 'EMAIL_ERROR') {
+            this.stopEmailPoll();
+            this.generatingEmails = false;
+            this.emailGenError = plan.emailError ?? 'Email generation failed. Check your API key and Gem instructions.';
+          }
+        }
+      });
+    }, 3000);
+  }
+
+  private stopEmailPoll(): void {
+    if (this.emailPollInterval) {
+      clearInterval(this.emailPollInterval);
+      this.emailPollInterval = null;
+    }
+  }
+
+  private loadEmailsAndAdvance(stepper: any): void {
+    const selected = this.selectedContacts;
+    if (selected.length === 0) {
+      this.generatingEmails = false;
+      stepper.selectedIndex = 2;
+      return;
+    }
+    let remaining = selected.length;
+    selected.forEach(c => {
+      this.planService.getEmailsForContact(this.planId!, c.id!).subscribe({
+        next: emails => {
+          this.emailsByContact[c.id!] = emails;
+          remaining--;
+          if (remaining === 0) {
+            this.generatingEmails = false;
+            stepper.selectedIndex = 2;
+            this.selectContact(selected[0]);
+          }
+        }
+      });
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.stopEmailPoll();
   }
 
   retryEmailGen(stepper: any): void {

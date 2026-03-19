@@ -62,12 +62,13 @@ public class CampaignPlanController {
     }
 
     @PostMapping("/{id}/generate-emails")
-    public ResponseEntity<Map<Long, List<GeneratedEmailDto>>> generateEmails(
+    public ResponseEntity<Map<String, String>> generateEmails(
             @PathVariable Long id,
             @RequestBody Map<String, List<Long>> body,
             Authentication auth) {
         List<Long> selectedContactIds = body.getOrDefault("selectedContactIds", List.of());
-        return ResponseEntity.ok(planService.generateEmails(id, selectedContactIds, auth));
+        planService.startEmailGeneration(id, selectedContactIds, auth);
+        return ResponseEntity.accepted().body(Map.of("status", "GENERATING_EMAILS"));
     }
 
     @GetMapping("/{id}/contacts/{contactId}/emails")
