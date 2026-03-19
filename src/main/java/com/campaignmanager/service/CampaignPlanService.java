@@ -10,8 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -35,6 +37,9 @@ public class CampaignPlanService {
     private final EmailJobRepository emailJobRepository;
     private final ContactService contactService;
     private final GeminiApiService geminiApiService;
+    private final CampaignPlanDocumentRepository documentRepository;
+    private final DocumentTextExtractorService documentTextExtractorService;
+    private final GoogleDriveImportService googleDriveImportService;
 
     private static final DateTimeFormatter DISPLAY_FMT =
             DateTimeFormatter.ofPattern("EEE, MMM d, yyyy");
@@ -76,6 +81,15 @@ public class CampaignPlanService {
         return toDto(planRepository.save(plan));
     }
 
+    // ─── Delete Plan ──────────────────────────────────────────────────────────
+
+    @Transactional
+    public void delete(Long planId, Authentication auth) {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        prospectContactRepository.deleteAllByCampaignPlan(plan);
+        planRepository.delete(plan);
+    }
+
     // ─── Generate Contacts ────────────────────────────────────────────────────
 
     @Transactional
@@ -87,10 +101,14 @@ public class CampaignPlanService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "No Contact Research Gem selected. Update the plan and choose a Gem.");
         }
-        if (plan.getDriveFolderUrl() == null || plan.getDriveFolderUrl().isBlank()) {
+
+        List<CampaignPlanDocument> docs = documentRepository.findAllByCampaignPlan(plan);
+        if (docs.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "No Google Drive folder URL provided.");
+                    "No documents uploaded. Please upload at least one briefing document before generating contacts.");
         }
+
+        String corpus = documentTextExtractorService.extractAll(docs);
 
         // Clear previous results
         prospectContactRepository.deleteAllByCampaignPlan(plan);
@@ -99,7 +117,7 @@ public class CampaignPlanService {
                 geminiSettings.getApiKey(),
                 geminiSettings.getModel(),
                 plan.getContactGem().getSystemInstructions(),
-                plan.getDriveFolderUrl());
+                corpus);
 
         List<ProspectContact> saved = generated.stream().map(dto -> {
             ProspectContact pc = new ProspectContact();
@@ -151,6 +169,11 @@ public class CampaignPlanService {
         List<LocalDateTime> schedule = EmailScheduleCalculator.calculateSchedule(LocalDate.now());
         Map<Long, List<GeneratedEmailDto>> result = new LinkedHashMap<>();
 
+        // Load document corpus once; reuse for all contacts
+        List<CampaignPlanDocument> docs = documentRepository.findAllByCampaignPlan(plan);
+        String corpus = documentTextExtractorService.extractAll(docs);
+        String emailSystemInstructions = plan.getEmailGem().getSystemInstructions();
+
         for (ProspectContact pc : contacts) {
             if (!selectedContactIds.contains(pc.getId())) continue;
 
@@ -161,9 +184,10 @@ public class CampaignPlanService {
             List<GeneratedEmailDto> emails = geminiApiService.generateEmails(
                     geminiSettings.getApiKey(),
                     geminiSettings.getModel(),
-                    plan.getEmailGem().getSystemInstructions(),
+                    emailSystemInstructions,
                     contactDto,
-                    schedule);
+                    schedule,
+                    corpus);
 
             List<GeneratedEmail> saved = emails.stream().map(dto -> {
                 GeneratedEmail ge = new GeneratedEmail();
@@ -458,5 +482,76 @@ public class CampaignPlanService {
 
     private String requireApiKey(Authentication auth) {
         return requireGeminiSettings(auth).getApiKey();
+    }
+
+    // ─── Document Management ──────────────────────────────────────────────────
+
+    public List<CampaignPlanDocumentDto> getDocuments(Long planId, Authentication auth) {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        return documentRepository.findAllByCampaignPlan(plan).stream()
+                .map(this::toDocumentDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<CampaignPlanDocumentDto> uploadDocuments(Long planId,
+                                                         List<MultipartFile> files,
+                                                         Authentication auth) throws IOException {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        List<CampaignPlanDocumentDto> saved = new ArrayList<>();
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) continue;
+            CampaignPlanDocument doc = new CampaignPlanDocument();
+            doc.setCampaignPlan(plan);
+            doc.setOriginalFileName(file.getOriginalFilename());
+            doc.setMimeType(file.getContentType());
+            doc.setFileContent(file.getBytes());
+            saved.add(toDocumentDto(documentRepository.save(doc)));
+            log.info("Uploaded briefing doc '{}' ({} bytes) for plan {}", file.getOriginalFilename(), file.getSize(), planId);
+        }
+        return saved;
+    }
+
+    @Transactional
+    public List<CampaignPlanDocumentDto> importDocumentsFromDrive(Long planId, String folderUrl, Authentication auth) {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        User owner = resolveUser(auth);
+
+        UserGeminiSettings settings = geminiSettingsRepository.findByUser(owner)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "No Gemini API key configured. Add your API key in Settings → Gemini first."));
+
+        String folderId = googleDriveImportService.extractFolderId(folderUrl);
+        if (folderId == null || folderId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid Google Drive folder URL. Use the folder's share link (e.g. https://drive.google.com/drive/folders/...)");
+        }
+
+        List<CampaignPlanDocument> imported =
+                googleDriveImportService.importFolder(folderId, settings.getApiKey(), plan);
+
+        if (imported.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "No supported files were found or downloaded from the Drive folder. Supported types: PDF, DOCX, TXT, HTML, Google Docs.");
+        }
+
+        return imported.stream().map(this::toDocumentDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteDocument(Long planId, Long docId, Authentication auth) {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        CampaignPlanDocument doc = documentRepository.findByIdAndCampaignPlan(docId, plan)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+        documentRepository.delete(doc);
+    }
+
+    private CampaignPlanDocumentDto toDocumentDto(CampaignPlanDocument doc) {
+        CampaignPlanDocumentDto dto = new CampaignPlanDocumentDto();
+        dto.setId(doc.getId());
+        dto.setOriginalFileName(doc.getOriginalFileName());
+        dto.setMimeType(doc.getMimeType());
+        dto.setCreatedAt(doc.getCreatedAt());
+        return dto;
     }
 }

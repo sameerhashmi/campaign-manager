@@ -3,10 +3,13 @@ package com.campaignmanager.controller;
 import com.campaignmanager.dto.*;
 import com.campaignmanager.service.CampaignPlanService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -88,8 +91,48 @@ public class CampaignPlanController {
         return ResponseEntity.ok(planService.getSummary(id, auth));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id, Authentication auth) {
+        planService.delete(id, auth);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{id}/convert")
     public ResponseEntity<CampaignDto> convert(@PathVariable Long id, Authentication auth) {
         return ResponseEntity.ok(planService.convertToCampaign(id, auth));
+    }
+
+    // ─── Document Upload (RAG) ─────────────────────────────────────────────────
+
+    @GetMapping("/{id}/documents")
+    public ResponseEntity<List<CampaignPlanDocumentDto>> getDocuments(
+            @PathVariable Long id, Authentication auth) {
+        return ResponseEntity.ok(planService.getDocuments(id, auth));
+    }
+
+    @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<List<CampaignPlanDocumentDto>> uploadDocuments(
+            @PathVariable Long id,
+            @RequestParam("files") List<MultipartFile> files,
+            Authentication auth) throws IOException {
+        return ResponseEntity.ok(planService.uploadDocuments(id, files, auth));
+    }
+
+    @DeleteMapping("/{id}/documents/{docId}")
+    public ResponseEntity<Void> deleteDocument(
+            @PathVariable Long id,
+            @PathVariable Long docId,
+            Authentication auth) {
+        planService.deleteDocument(id, docId, auth);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/documents/from-drive")
+    public ResponseEntity<List<CampaignPlanDocumentDto>> importFromDrive(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body,
+            Authentication auth) {
+        String folderUrl = body.getOrDefault("folderUrl", "");
+        return ResponseEntity.ok(planService.importDocumentsFromDrive(id, folderUrl, auth));
     }
 }

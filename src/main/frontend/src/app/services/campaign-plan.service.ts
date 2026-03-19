@@ -44,6 +44,13 @@ export interface GeneratedEmail {
   scheduledAt?: string;
 }
 
+export interface CampaignPlanDocument {
+  id: number;
+  originalFileName: string;
+  mimeType: string;
+  createdAt: string;
+}
+
 export interface CampaignPlanSummary {
   campaignName: string;
   customer: string;
@@ -76,6 +83,10 @@ export class CampaignPlanService {
 
   update(id: number, plan: CampaignPlan): Observable<CampaignPlan> {
     return this.http.put<CampaignPlan>(`${this.base}/${id}`, plan);
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}`);
   }
 
   generateContacts(planId: number): Observable<ProspectContact[]> {
@@ -112,6 +123,27 @@ export class CampaignPlanService {
   convert(planId: number): Observable<{ id: number; name: string; status: string }> {
     return this.http.post<{ id: number; name: string; status: string }>(
       `${this.base}/${planId}/convert`, {}
+    );
+  }
+
+  getDocuments(planId: number): Observable<CampaignPlanDocument[]> {
+    return this.http.get<CampaignPlanDocument[]>(`${this.base}/${planId}/documents`);
+  }
+
+  uploadDocuments(planId: number, files: File[]): Observable<CampaignPlanDocument[]> {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f, f.name));
+    return this.http.post<CampaignPlanDocument[]>(`${this.base}/${planId}/documents`, formData);
+  }
+
+  deleteDocument(planId: number, docId: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${planId}/documents/${docId}`);
+  }
+
+  importDocumentsFromDrive(planId: number, folderUrl: string): Observable<CampaignPlanDocument[]> {
+    return this.http.post<CampaignPlanDocument[]>(
+      `${this.base}/${planId}/documents/from-drive`,
+      { folderUrl }
     );
   }
 }

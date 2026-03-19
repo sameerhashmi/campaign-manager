@@ -18,7 +18,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDividerModule } from '@angular/material/divider';
 import { NavComponent } from '../../shared/nav/nav.component';
 import { GemService, Gem } from '../../../services/gem.service';
-import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, CampaignPlanSummary } from '../../../services/campaign-plan.service';
+import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, CampaignPlanSummary, CampaignPlanDocument } from '../../../services/campaign-plan.service';
 
 @Component({
   selector: 'app-campaign-plan-wizard',
@@ -74,13 +74,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Google Drive Folder URL *</mat-label>
-                  <input matInput formControlName="driveFolderUrl"
-                         placeholder="https://drive.google.com/drive/folders/...">
-                  <mat-hint>Share the folder with "anyone with the link" or ensure Workspace Gemini has access.</mat-hint>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="full-width">
                   <mat-label>Contact Research Gem *</mat-label>
                   <mat-select formControlName="contactGemId">
                     @for (gem of contactGems; track gem.id) {
@@ -90,7 +83,7 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                       <mat-option disabled>No Contact Research Gems found — create one in Settings</mat-option>
                     }
                   </mat-select>
-                  <mat-hint>Gem used to extract contacts from your Drive folder.</mat-hint>
+                  <mat-hint>Gem used to extract contacts from the uploaded briefing documents.</mat-hint>
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="full-width">
@@ -107,11 +100,71 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                 </mat-form-field>
               </form>
 
+              <!-- ─── Document Upload ─────────────────────────────────────── -->
+              <div class="upload-section">
+                <div class="upload-label">
+                  <mat-icon>upload_file</mat-icon>
+                  <span>Briefing Documents *</span>
+                  <span class="upload-hint">HTML, PDF, DOCX, TXT — Gemini reads these to find contacts and generate emails</span>
+                </div>
+
+                <div class="upload-drop-zone" (click)="fileInput.click()">
+                  <mat-icon class="upload-icon">cloud_upload</mat-icon>
+                  <p>Click to attach files</p>
+                  <input #fileInput type="file" multiple accept=".html,.htm,.pdf,.docx,.txt"
+                         style="display:none" (change)="onFilesSelected($event)">
+                </div>
+
+                <!-- Google Drive folder import -->
+                <div class="drive-import-row">
+                  <mat-icon class="drive-icon">add_to_drive</mat-icon>
+                  <mat-form-field appearance="outline" class="drive-field">
+                    <mat-label>Or import from a Google Drive folder</mat-label>
+                    <input matInput [(ngModel)]="driveImportUrl"
+                           placeholder="https://drive.google.com/drive/folders/...">
+                    <mat-hint>Folder must be shared as "Anyone with the link can view"</mat-hint>
+                  </mat-form-field>
+                  <button mat-stroked-button
+                          [disabled]="!driveImportUrl.trim() || importingFromDrive"
+                          (click)="importFromDrive()">
+                    @if (importingFromDrive) {
+                      <mat-spinner diameter="18" style="display:inline-block;margin-right:4px"></mat-spinner>
+                    } @else {
+                      <mat-icon>download</mat-icon>
+                    }
+                    Import
+                  </button>
+                </div>
+
+                @if (uploadedDocs.length > 0 || pendingFiles.length > 0) {
+                  <div class="doc-list">
+                    @for (doc of uploadedDocs; track doc.id) {
+                      <div class="doc-item">
+                        <mat-icon class="doc-icon">description</mat-icon>
+                        <span class="doc-name">{{ doc.originalFileName }}</span>
+                        <button mat-icon-button (click)="removeUploadedDoc(doc)" matTooltip="Remove">
+                          <mat-icon style="font-size:16px">close</mat-icon>
+                        </button>
+                      </div>
+                    }
+                    @for (f of pendingFiles; track f.name) {
+                      <div class="doc-item pending">
+                        <mat-icon class="doc-icon">attach_file</mat-icon>
+                        <span class="doc-name">{{ f.name }}</span>
+                        <button mat-icon-button (click)="removePendingFile(f)" matTooltip="Remove">
+                          <mat-icon style="font-size:16px">close</mat-icon>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+
               <div class="step-actions">
                 <button mat-stroked-button (click)="cancel()">Cancel</button>
                 <button mat-raised-button color="primary"
-                        [disabled]="step1Form.invalid || savingStep1"
-                        (click)="saveStep1()">
+                        [disabled]="step1Form.invalid || savingStep1 || (uploadedDocs.length === 0 && pendingFiles.length === 0)"
+                        (click)="saveStep1(stepper)">
                   @if (savingStep1) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
                   Next: Generate Customer List
                   <mat-icon>arrow_forward</mat-icon>
@@ -121,13 +174,22 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
           </mat-step>
 
           <!-- ═══ STEP 2: Customer List ═══ -->
-          <mat-step label="Customer List">
+          <mat-step label="Customer List" [completed]="step2Completed">
             <div class="step-content">
               @if (generatingContacts) {
                 <div class="generating-state">
                   <mat-spinner diameter="48"></mat-spinner>
                   <p class="generating-text">Gemini is analyzing your Drive folder…</p>
                   <p class="generating-sub">This may take 20–60 seconds depending on the number of documents.</p>
+                  @if (uploadedDocs.length > 0) {
+                    <p class="generating-url"><mat-icon style="font-size:14px;vertical-align:middle">description</mat-icon> {{ uploadedDocs.length }} document(s) uploaded</p>
+                  }
+                </div>
+              } @else if (generatingEmails) {
+                <div class="generating-state">
+                  <mat-spinner diameter="48"></mat-spinner>
+                  <p class="generating-text">Generating emails for {{ selectedContacts.length }} contact(s)…</p>
+                  <p class="generating-sub">This may take 30–90 seconds.</p>
                 </div>
               } @else if (contactGenError) {
                 <div class="error-banner">
@@ -136,6 +198,15 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                     <strong>Contact generation failed</strong>
                     <p>{{ contactGenError }}</p>
                     <button mat-stroked-button color="warn" (click)="generateContacts()">Retry</button>
+                  </div>
+                </div>
+              } @else if (emailGenError) {
+                <div class="error-banner">
+                  <mat-icon>error</mat-icon>
+                  <div>
+                    <strong>Email generation failed</strong>
+                    <p>{{ emailGenError }}</p>
+                    <button mat-stroked-button color="warn" (click)="retryEmailGen(stepper)">Retry</button>
                   </div>
                 </div>
               } @else {
@@ -229,32 +300,27 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                 </div>
               }
 
-              <div class="step-actions">
-                <button mat-stroked-button (click)="cancel()">Cancel</button>
-                <button mat-stroked-button matStepperPrevious>
-                  <mat-icon>arrow_back</mat-icon> Back
-                </button>
-                <button mat-raised-button color="primary"
-                        [disabled]="selectedContacts.length === 0 || generatingEmails"
-                        (click)="goToStep3(stepper)">
-                  @if (generatingEmails) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
-                  Generate Emails
-                  <mat-icon>arrow_forward</mat-icon>
-                </button>
-              </div>
+              @if (!generatingContacts && !generatingEmails) {
+                <div class="step-actions">
+                  <button mat-stroked-button (click)="cancel()">Cancel</button>
+                  <button mat-stroked-button matStepperPrevious>
+                    <mat-icon>arrow_back</mat-icon> Back
+                  </button>
+                  <button mat-raised-button color="primary"
+                          [disabled]="selectedContacts.length === 0"
+                          (click)="goToStep3(stepper)">
+                    Generate Emails
+                    <mat-icon>arrow_forward</mat-icon>
+                  </button>
+                </div>
+              }
             </div>
           </mat-step>
 
           <!-- ═══ STEP 3: Email Review ═══ -->
           <mat-step label="Email Review">
             <div class="step-content">
-              @if (generatingEmails) {
-                <div class="generating-state">
-                  <mat-spinner diameter="48"></mat-spinner>
-                  <p class="generating-text">Generating emails for {{ selectedContacts.length }} contact(s)…</p>
-                  <p class="generating-sub">This may take 30–90 seconds.</p>
-                </div>
-              } @else {
+              @if (true) {
                 <div class="email-review-panels">
                   <!-- Panel 1: Contact list -->
                   <div class="panel panel-contacts">
@@ -438,6 +504,7 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
     }
     .generating-text { font-size: 16px; font-weight: 500; margin: 0; }
     .generating-sub  { font-size: 13px; color: #5f6368; margin: 0; }
+    .generating-url  { font-size: 12px; color: #1a73e8; margin: 0; word-break: break-all; max-width: 560px; text-align: center; }
     .error-banner {
       display: flex; gap: 12px; background: #fce8e6; border-radius: 8px;
       padding: 16px; color: #c5221f; margin-bottom: 16px;
@@ -507,6 +574,36 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       mat-icon { font-size: 16px; width: 16px; height: 16px; }
     }
 
+    /* Document upload */
+    .upload-section { max-width: 560px; margin-top: 8px; }
+    .upload-label {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+      font-size: 14px; font-weight: 500; color: #3c4043;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; color: #5f6368; }
+    }
+    .upload-hint { font-size: 12px; font-weight: 400; color: #9aa0a6; }
+    .upload-drop-zone {
+      border: 2px dashed #dadce0; border-radius: 8px; padding: 24px;
+      text-align: center; cursor: pointer; transition: border-color 0.2s;
+      color: #5f6368; font-size: 13px;
+      mat-icon.upload-icon { font-size: 36px; width: 36px; height: 36px; display: block; margin: 0 auto 8px; color: #9aa0a6; }
+      p { margin: 0; }
+      &:hover { border-color: #1a73e8; color: #1a73e8; }
+    }
+    .drive-import-row {
+      display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .drive-icon { color: #1a73e8; margin-top: 14px; flex-shrink: 0; font-size: 22px; width: 22px; height: 22px; }
+    .drive-field { flex: 1; min-width: 260px; }
+    .doc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .doc-item {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      background: #e8f5e9; border-radius: 6px; font-size: 13px;
+      mat-icon.doc-icon { font-size: 16px; width: 16px; height: 16px; color: #2e7d32; }
+      &.pending { background: #e8f0fe; mat-icon.doc-icon { color: #1a73e8; } }
+    }
+    .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     /* Summary */
     .summary-card { max-width: 520px; margin-bottom: 16px; }
     .summary-grid { display: flex; flex-direction: column; gap: 12px; }
@@ -525,15 +622,21 @@ export class CampaignPlanWizardComponent implements OnInit {
 
   planId: number | null = null;
   savingStep1 = false;
+  uploadedDocs: CampaignPlanDocument[] = [];
+  pendingFiles: File[] = [];
+  driveImportUrl = '';
+  importingFromDrive = false;
 
   contacts: ProspectContact[] = [];
   generatingContacts = false;
   contactGenError: string | null = null;
   editingContactId: number | null = null;
+  step2Completed = false;
 
   contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance', 'source'];
 
   generatingEmails = false;
+  emailGenError: string | null = null;
   emailsByContact: { [contactId: number]: GeneratedEmail[] } = {};
   activeContactId: number | null = null;
   activeEmails: GeneratedEmail[] = [];
@@ -559,7 +662,6 @@ export class CampaignPlanWizardComponent implements OnInit {
       name: ['', Validators.required],
       customer: ['', Validators.required],
       tanzuContact: [''],
-      driveFolderUrl: ['', Validators.required],
       contactGemId: [null, Validators.required],
       emailGemId: [null, Validators.required]
     });
@@ -594,14 +696,14 @@ export class CampaignPlanWizardComponent implements OnInit {
         name: plan.name,
         customer: plan.customer,
         tanzuContact: plan.tanzuContact,
-        driveFolderUrl: plan.driveFolderUrl,
         contactGemId: plan.contactGemId,
         emailGemId: plan.emailGemId
       });
     });
+    this.planService.getDocuments(id).subscribe(docs => this.uploadedDocs = docs);
   }
 
-  saveStep1(): void {
+  saveStep1(stepper: any): void {
     if (this.step1Form.invalid) return;
     this.savingStep1 = true;
     const dto = this.step1Form.value as CampaignPlan;
@@ -613,8 +715,25 @@ export class CampaignPlanWizardComponent implements OnInit {
     save$.subscribe({
       next: plan => {
         this.planId = plan.id!;
-        this.savingStep1 = false;
-        this.generateContacts();
+        if (this.pendingFiles.length > 0) {
+          this.planService.uploadDocuments(this.planId, this.pendingFiles).subscribe({
+            next: newDocs => {
+              this.uploadedDocs = [...this.uploadedDocs, ...newDocs];
+              this.pendingFiles = [];
+              this.savingStep1 = false;
+              stepper.selectedIndex = 1;
+              this.generateContacts();
+            },
+            error: err => {
+              this.savingStep1 = false;
+              this.snackBar.open('Failed to upload documents: ' + (err?.error?.message ?? err.message), 'Close', { duration: 6000 });
+            }
+          });
+        } else {
+          this.savingStep1 = false;
+          stepper.selectedIndex = 1;
+          this.generateContacts();
+        }
       },
       error: err => {
         this.savingStep1 = false;
@@ -623,20 +742,87 @@ export class CampaignPlanWizardComponent implements OnInit {
     });
   }
 
+  onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files) return;
+    const newFiles = Array.from(input.files);
+    newFiles.forEach(f => {
+      if (!this.pendingFiles.some(p => p.name === f.name)) {
+        this.pendingFiles = [...this.pendingFiles, f];
+      }
+    });
+    input.value = ''; // reset so same file can be re-added if removed
+  }
+
+  removePendingFile(file: File): void {
+    this.pendingFiles = this.pendingFiles.filter(f => f !== file);
+  }
+
+  removeUploadedDoc(doc: CampaignPlanDocument): void {
+    if (!this.planId) return;
+    this.planService.deleteDocument(this.planId, doc.id).subscribe({
+      next: () => this.uploadedDocs = this.uploadedDocs.filter(d => d.id !== doc.id),
+      error: () => this.snackBar.open('Failed to remove document', 'Close', { duration: 3000 })
+    });
+  }
+
+  importFromDrive(): void {
+    if (!this.driveImportUrl.trim()) return;
+    this.importingFromDrive = true;
+
+    const doImport = (planId: number) => {
+      this.planService.importDocumentsFromDrive(planId, this.driveImportUrl.trim()).subscribe({
+        next: docs => {
+          this.uploadedDocs = [...this.uploadedDocs, ...docs];
+          this.driveImportUrl = '';
+          this.importingFromDrive = false;
+          this.snackBar.open(`${docs.length} file(s) imported from Drive`, '', { duration: 4000, panelClass: 'snack-success' });
+        },
+        error: err => {
+          this.importingFromDrive = false;
+          const msg = err?.error?.message ?? 'Failed to import from Drive. Make sure the folder is publicly shared and your API key has the Google Drive API enabled.';
+          this.snackBar.open(msg, 'Close', { duration: 8000 });
+        }
+      });
+    };
+
+    if (this.planId) {
+      doImport(this.planId);
+    } else if (this.step1Form.valid) {
+      // Auto-save plan first, then import
+      const dto = this.step1Form.value as CampaignPlan;
+      this.planService.create(dto).subscribe({
+        next: plan => {
+          this.planId = plan.id!;
+          doImport(this.planId);
+        },
+        error: err => {
+          this.importingFromDrive = false;
+          this.snackBar.open('Fill in required fields before importing from Drive.', 'Close', { duration: 5000 });
+        }
+      });
+    } else {
+      this.importingFromDrive = false;
+      this.snackBar.open('Fill in required fields (Campaign Name, Customer, Gems) before importing from Drive.', 'Close', { duration: 5000 });
+    }
+  }
+
   generateContacts(): void {
     if (!this.planId) return;
     this.generatingContacts = true;
     this.contactGenError = null;
+    this.step2Completed = false;
     this.contacts = [];
 
     this.planService.generateContacts(this.planId).subscribe({
       next: contacts => {
         this.contacts = contacts;
         this.generatingContacts = false;
+        this.step2Completed = true;
       },
       error: err => {
         this.generatingContacts = false;
-        this.contactGenError = err?.error?.message ?? 'Gemini could not generate contacts. Check your API key, Drive URL, and Gem instructions.';
+        this.contactGenError = err?.error?.message ?? 'Gemini could not generate contacts. Check your API key and Gem instructions.';
       }
     });
   }
@@ -669,24 +855,29 @@ export class CampaignPlanWizardComponent implements OnInit {
     const selected = this.selectedContacts.map(c => c.id!);
     if (selected.length === 0) return;
 
-    stepper.next();
     this.generatingEmails = true;
+    this.emailGenError = null;
     this.emailsByContact = {};
 
     this.planService.generateEmails(this.planId!, selected).subscribe({
       next: result => {
         this.emailsByContact = result;
         this.generatingEmails = false;
-        // Auto-select first contact
+        stepper.selectedIndex = 2;
         if (this.selectedContacts.length > 0) {
           this.selectContact(this.selectedContacts[0]);
         }
       },
       error: err => {
         this.generatingEmails = false;
-        this.snackBar.open('Email generation failed: ' + (err?.error?.message ?? 'Unknown error'), 'Close', { duration: 8000 });
+        this.emailGenError = err?.error?.message ?? 'Email generation failed. Check your API key, model selection, and Gem instructions.';
       }
     });
+  }
+
+  retryEmailGen(stepper: any): void {
+    this.emailGenError = null;
+    this.goToStep3(stepper);
   }
 
   selectContact(contact: ProspectContact): void {
