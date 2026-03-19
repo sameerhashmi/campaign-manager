@@ -7,7 +7,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
+import java.util.Map;
+
+import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
 
 @RestController
 @RequestMapping("/api/gems")
@@ -41,5 +46,13 @@ public class GemController {
     public ResponseEntity<Void> delete(@PathVariable Long id, Authentication auth) {
         gemService.delete(id, auth);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/test", consumes = {MULTIPART_FORM_DATA_VALUE, "*/*"})
+    public ResponseEntity<Map<String, Object>> test(
+            @PathVariable Long id,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            Authentication auth) {
+        return ResponseEntity.ok(gemService.testGem(id, files, auth));
     }
 }

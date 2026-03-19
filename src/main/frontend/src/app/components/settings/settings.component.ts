@@ -140,6 +140,8 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                    (change)="onFileSelected($event)">
             <input #refreshInput type="file" accept=".json" style="display:none"
                    (change)="onRefreshFileSelected($event)">
+            <input #gemTestInput type="file" multiple accept=".html,.htm,.pdf,.docx,.txt"
+                   style="display:none" (change)="onGemTestFilesSelected($event)">
 
             @if (!status?.connecting) {
               @if (!status?.cloudEnvironment) {
@@ -292,6 +294,9 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                   }
                 </div>
                 <div class="gem-actions">
+                  <button mat-icon-button matTooltip="Test Gem" (click)="toggleGemTest(gem)">
+                    <mat-icon>science</mat-icon>
+                  </button>
                   <button mat-icon-button matTooltip="Edit Gem" (click)="editGem(gem)">
                     <mat-icon>edit</mat-icon>
                   </button>
@@ -300,6 +305,99 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                   </button>
                 </div>
               </div>
+
+              <!-- Inline test panel -->
+              @if (gemTestPanelId === gem.id) {
+                <div class="gem-test-panel">
+                  <div class="gem-test-header">
+                    <mat-icon>science</mat-icon>
+                    <strong>Test: {{ gem.name }}</strong>
+                    @if (gem.gemType === 'EMAIL_GENERATION') {
+                      <span class="gem-test-note">(runs against a sample contact — VP of Platform Engineering)</span>
+                    }
+                  </div>
+
+                  <div class="gem-test-inputs">
+                    <div class="gem-test-upload-zone" (click)="openGemTestFilePicker(gem.id!)">
+                      <mat-icon style="font-size:20px;width:20px;height:20px;color:#5f6368">upload_file</mat-icon>
+                      <span>Add briefing documents</span>
+                      <span style="font-size:11px;color:#9aa0a6">(HTML, PDF, DOCX, TXT)</span>
+                    </div>
+                    <button mat-raised-button color="primary"
+                            [disabled]="testingGemId === gem.id"
+                            (click)="runGemTest(gem)">
+                      @if (testingGemId === gem.id) {
+                        <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner>
+                      }
+                      Run Test
+                    </button>
+                  </div>
+                  @if ((gemTestFiles[gem.id!] || []).length > 0) {
+                    <div class="gem-test-file-list">
+                      @for (f of gemTestFiles[gem.id!]; track f.name) {
+                        <div class="gem-test-file-item">
+                          <mat-icon style="font-size:14px;width:14px;height:14px;color:#34a853">insert_drive_file</mat-icon>
+                          <span>{{ f.name }}</span>
+                          <button mat-icon-button style="width:20px;height:20px;line-height:20px"
+                                  (click)="removeGemTestFile(gem.id!, f)">
+                            <mat-icon style="font-size:14px;width:14px;height:14px">close</mat-icon>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  @if (gemTestError[gem.id!]) {
+                    <div class="gem-test-error">
+                      <mat-icon>error</mat-icon>
+                      {{ gemTestError[gem.id!] }}
+                    </div>
+                  }
+
+                  @if (gemTestResult[gem.id!]) {
+                    <div class="gem-test-results">
+                      @if (gemTestResult[gem.id!].type === 'CONTACT_RESEARCH') {
+                        <div class="gem-test-result-header">
+                          {{ gemTestResult[gem.id!].contacts?.length ?? 0 }} contact(s) extracted
+                        </div>
+                        <div class="gem-contacts-scroll">
+                          <table class="gem-result-table">
+                            <thead>
+                              <tr>
+                                <th>Name</th><th>Title</th><th>Email</th>
+                                <th>Role</th><th>Team</th><th>Relevance</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (c of gemTestResult[gem.id!].contacts; track c.name) {
+                                <tr>
+                                  <td>{{ c.name }}</td>
+                                  <td>{{ c.title }}</td>
+                                  <td>{{ c.email || '—' }}</td>
+                                  <td>{{ c.roleType }}</td>
+                                  <td>{{ c.teamDomain }}</td>
+                                  <td [class]="'rel-' + (c.tanzuRelevance || '').toLowerCase()">{{ c.tanzuRelevance }}</td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      } @else {
+                        <div class="gem-test-result-header">
+                          {{ gemTestResult[gem.id!].emails?.length ?? 0 }} email(s) generated for test contact
+                        </div>
+                        @for (email of gemTestResult[gem.id!].emails; track email.stepNumber) {
+                          <div class="gem-email-preview">
+                            <div class="gem-email-step">Email {{ email.stepNumber }}</div>
+                            <div class="gem-email-subject">{{ email.subject }}</div>
+                            <pre class="gem-email-body">{{ email.body }}</pre>
+                          </div>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+              }
             }
 
             <!-- Add / Edit Gem Form -->
@@ -437,10 +535,69 @@ import { switchMap, takeWhile } from 'rxjs/operators';
       margin-top: 16px; display: flex; flex-direction: column; gap: 8px;
       background: #f8f9fa; border-radius: 8px; padding: 16px;
     }
+    .gem-test-panel {
+      background: #f0f4ff; border: 1px solid #c5d7f8; border-radius: 8px;
+      padding: 16px; margin: 4px 0 12px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .gem-test-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: #1a73e8;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    }
+    .gem-test-note { font-size: 11px; color: #5f6368; font-weight: normal; }
+    .gem-test-inputs { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+    .gem-test-upload-zone {
+      display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+      border: 1.5px dashed #c5d7f8; border-radius: 6px; cursor: pointer;
+      font-size: 13px; color: #3c4043; background: white;
+      &:hover { border-color: #1a73e8; background: #f0f4ff; }
+    }
+    .gem-test-file-list {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .gem-test-file-item {
+      display: flex; align-items: center; gap: 6px; font-size: 12px; color: #3c4043;
+      span { flex: 1; }
+    }
+    .gem-test-error {
+      display: flex; align-items: center; gap: 8px;
+      background: #fce8e6; border-radius: 6px; padding: 10px 12px;
+      font-size: 13px; color: #c5221f;
+      mat-icon { font-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
+    }
+    .gem-test-results {
+      background: white; border-radius: 6px; border: 1px solid #e0e0e0; overflow: hidden;
+    }
+    .gem-test-result-header {
+      padding: 8px 12px; font-size: 12px; font-weight: 600; color: #3c4043;
+      background: #f8f9fa; border-bottom: 1px solid #e0e0e0;
+    }
+    .gem-contacts-scroll { overflow-x: auto; max-height: 320px; overflow-y: auto; }
+    .gem-result-table {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+      th { padding: 8px 10px; text-align: left; background: #f1f3f4; border-bottom: 1px solid #e0e0e0; font-weight: 600; color: #5f6368; white-space: nowrap; }
+      td { padding: 8px 10px; border-bottom: 1px solid #f1f3f4; vertical-align: top; }
+      tr:last-child td { border-bottom: none; }
+    }
+    .rel-high   { color: #137333; font-weight: 600; }
+    .rel-medium { color: #e37400; }
+    .rel-low    { color: #9aa0a6; }
+    .gem-email-preview {
+      padding: 12px 16px; border-bottom: 1px solid #f1f3f4;
+      &:last-child { border-bottom: none; }
+    }
+    .gem-email-step    { font-size: 11px; font-weight: 600; color: #1a73e8; margin-bottom: 4px; }
+    .gem-email-subject { font-size: 13px; font-weight: 600; color: #202124; margin-bottom: 6px; }
+    .gem-email-body {
+      font-size: 12px; color: #5f6368; white-space: pre-wrap; font-family: inherit;
+      margin: 0; max-height: 200px; overflow-y: auto; background: #f8f9fa;
+      border-radius: 4px; padding: 8px;
+    }
   `]
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   @ViewChild('refreshInput') refreshInputEl!: ElementRef<HTMLInputElement>;
+  @ViewChild('gemTestInput') gemTestInputEl!: ElementRef<HTMLInputElement>;
 
   status: GmailSessionStatus | null = null;
   sessions: ConnectedSession[] = [];
@@ -467,6 +624,14 @@ export class SettingsComponent implements OnInit, OnDestroy {
   editingGemId: number | null = null;
   savingGem = false;
   gemForm: Gem = { name: '', systemInstructions: '', gemType: 'CONTACT_RESEARCH' };
+
+  // Gem test
+  testingGemId: number | null = null;
+  gemTestPanelId: number | null = null;  // which gem has the panel open
+  gemTestFiles: { [id: number]: File[] } = {};
+  gemTestResult: { [id: number]: any } = {};
+  gemTestError: { [id: number]: string } = {};
+  private gemTestActiveId: number | null = null;
 
   isAdmin = false;
 
@@ -798,6 +963,59 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.showGemForm = false;
     this.editingGemId = null;
     this.gemForm = { name: '', systemInstructions: '', gemType: 'CONTACT_RESEARCH' };
+  }
+
+  toggleGemTest(gem: Gem): void {
+    if (this.gemTestPanelId === gem.id) {
+      this.gemTestPanelId = null;
+    } else {
+      this.gemTestPanelId = gem.id ?? null;
+      delete this.gemTestResult[gem.id!];
+      delete this.gemTestError[gem.id!];
+    }
+  }
+
+  openGemTestFilePicker(gemId: number): void {
+    this.gemTestActiveId = gemId;
+    this.gemTestInputEl.nativeElement.value = '';
+    this.gemTestInputEl.nativeElement.click();
+  }
+
+  onGemTestFilesSelected(event: Event): void {
+    const id = this.gemTestActiveId;
+    if (id == null) return;
+    const files = (event.target as HTMLInputElement).files;
+    if (!files || files.length === 0) return;
+    if (!this.gemTestFiles[id]) this.gemTestFiles[id] = [];
+    for (let i = 0; i < files.length; i++) {
+      this.gemTestFiles[id].push(files[i]);
+    }
+  }
+
+  removeGemTestFile(gemId: number, file: File): void {
+    if (!this.gemTestFiles[gemId]) return;
+    this.gemTestFiles[gemId] = this.gemTestFiles[gemId].filter(f => f !== file);
+  }
+
+  runGemTest(gem: Gem): void {
+    if (!gem.id) return;
+    this.testingGemId = gem.id;
+    delete this.gemTestResult[gem.id];
+    delete this.gemTestError[gem.id];
+
+    const formData = new FormData();
+    (this.gemTestFiles[gem.id] ?? []).forEach(f => formData.append('files', f));
+
+    this.http.post<any>(`/api/gems/${gem.id}/test`, formData).subscribe({
+      next: result => {
+        this.gemTestResult[gem.id!] = result;
+        this.testingGemId = null;
+      },
+      error: err => {
+        this.gemTestError[gem.id!] = err?.error?.message ?? 'Test failed. Check your API key, model, and Gem instructions.';
+        this.testingGemId = null;
+      }
+    });
   }
 
   deleteGem(gem: Gem): void {
