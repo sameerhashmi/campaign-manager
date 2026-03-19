@@ -81,7 +81,7 @@ public class CampaignPlanService {
     @Transactional
     public List<ProspectContactDto> generateContacts(Long planId, Authentication auth) {
         CampaignPlan plan = resolvePlan(planId, auth);
-        String apiKey = requireApiKey(auth);
+        UserGeminiSettings geminiSettings = requireGeminiSettings(auth);
 
         if (plan.getContactGem() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -96,7 +96,8 @@ public class CampaignPlanService {
         prospectContactRepository.deleteAllByCampaignPlan(plan);
 
         List<ProspectContactDto> generated = geminiApiService.generateContactList(
-                apiKey,
+                geminiSettings.getApiKey(),
+                geminiSettings.getModel(),
                 plan.getContactGem().getSystemInstructions(),
                 plan.getDriveFolderUrl());
 
@@ -132,7 +133,7 @@ public class CampaignPlanService {
                                                              List<Long> selectedContactIds,
                                                              Authentication auth) {
         CampaignPlan plan = resolvePlan(planId, auth);
-        String apiKey = requireApiKey(auth);
+        UserGeminiSettings geminiSettings = requireGeminiSettings(auth);
 
         if (plan.getEmailGem() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -158,7 +159,8 @@ public class CampaignPlanService {
 
             ProspectContactDto contactDto = toProspectDto(pc);
             List<GeneratedEmailDto> emails = geminiApiService.generateEmails(
-                    apiKey,
+                    geminiSettings.getApiKey(),
+                    geminiSettings.getModel(),
                     plan.getEmailGem().getSystemInstructions(),
                     contactDto,
                     schedule);
@@ -447,11 +449,14 @@ public class CampaignPlanService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
     }
 
-    private String requireApiKey(Authentication auth) {
+    private UserGeminiSettings requireGeminiSettings(Authentication auth) {
         User user = resolveUser(auth);
         return geminiSettingsRepository.findByUser(user)
-                .map(UserGeminiSettings::getApiKey)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "No Gemini API key configured. Go to Settings → Gemini to add your API key."));
+    }
+
+    private String requireApiKey(Authentication auth) {
+        return requireGeminiSettings(auth).getApiKey();
     }
 }

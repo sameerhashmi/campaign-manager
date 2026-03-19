@@ -258,6 +258,7 @@ public class SettingsController {
                     dto.setMaskedKey(key.length() > 4
                             ? "••••••••" + key.substring(key.length() - 4)
                             : "••••");
+                    dto.setModel(s.getModel());
                     return ResponseEntity.ok(dto);
                 })
                 .orElseGet(() -> {
@@ -285,7 +286,36 @@ public class SettingsController {
         GeminiSettingsDto dto = new GeminiSettingsDto();
         dto.setConnected(true);
         dto.setMaskedKey("••••••••" + apiKey.substring(Math.max(0, apiKey.length() - 4)));
+        dto.setModel(settings.getModel());
         return ResponseEntity.ok(dto);
+    }
+
+    @PostMapping("/gemini/model")
+    public ResponseEntity<GeminiSettingsDto> saveGeminiModel(@RequestBody Map<String, String> body,
+                                                             Authentication auth) {
+        String model = body.getOrDefault("model", "").trim();
+        User user = resolveUser(auth);
+        UserGeminiSettings settings = geminiSettingsRepository.findByUser(user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "No API key saved. Add your Gemini API key first."));
+        settings.setModel(model.isBlank() ? null : model);
+        settings.setUpdatedAt(LocalDateTime.now());
+        geminiSettingsRepository.save(settings);
+
+        GeminiSettingsDto dto = new GeminiSettingsDto();
+        dto.setConnected(true);
+        String key = settings.getApiKey();
+        dto.setMaskedKey(key.length() > 4 ? "••••••••" + key.substring(key.length() - 4) : "••••");
+        dto.setModel(settings.getModel());
+        return ResponseEntity.ok(dto);
+    }
+
+    @GetMapping("/gemini/models")
+    public ResponseEntity<List<String>> listGeminiModels(Authentication auth) {
+        User user = resolveUser(auth);
+        return geminiSettingsRepository.findByUser(user)
+                .map(s -> ResponseEntity.ok(geminiApiService.listModels(s.getApiKey())))
+                .orElseGet(() -> ResponseEntity.ok(List.of()));
     }
 
     @DeleteMapping("/gemini/api-key")
@@ -300,7 +330,7 @@ public class SettingsController {
         User user = resolveUser(auth);
         return geminiSettingsRepository.findByUser(user)
                 .map(s -> {
-                    String error = geminiApiService.testConnection(s.getApiKey());
+                    String error = geminiApiService.testConnection(s.getApiKey(), s.getModel());
                     Map<String, Object> result = new HashMap<>();
                     result.put("ok", error == null);
                     if (error != null) result.put("error", error);

@@ -30,7 +30,10 @@ import java.util.Map;
 public class GeminiApiService {
 
     private static final String GEMINI_BASE =
-        "https://generativelanguage.googleapis.com/v1/models/";
+        "https://generativelanguage.googleapis.com/v1beta/models/";
+
+    private static final String MODELS_URL =
+        "https://generativelanguage.googleapis.com/v1beta/models?key=";
 
     @Value("${gemini.model:gemini-1.5-flash}")
     private String geminiModel;
@@ -41,11 +44,43 @@ public class GeminiApiService {
     // ─── Public API ───────────────────────────────────────────────────────────
 
     /**
-     * Tests the API key. Returns null on success, or an error message string on failure.
+     * Lists all models available for this API key that support generateContent.
+     * Returns model IDs (e.g. "gemini-1.5-flash") sorted alphabetically.
      */
-    public String testConnection(String apiKey) {
+    public List<String> listModels(String apiKey) {
         try {
-            call(apiKey, buildRequest("Say hello", null));
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(
+                MODELS_URL + apiKey, HttpMethod.GET, entity, String.class);
+            JsonNode root = objectMapper.readTree(response.getBody());
+            List<String> result = new ArrayList<>();
+            for (JsonNode model : root.path("models")) {
+                boolean supportsGenerate = false;
+                for (JsonNode method : model.path("supportedGenerationMethods")) {
+                    if ("generateContent".equals(method.asText())) { supportsGenerate = true; break; }
+                }
+                if (supportsGenerate) {
+                    String name = model.path("name").asText(""); // "models/gemini-1.5-flash"
+                    result.add(name.startsWith("models/") ? name.substring(7) : name);
+                }
+            }
+            result.sort(String::compareTo);
+            return result;
+        } catch (Exception e) {
+            log.warn("Failed to list Gemini models: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Tests the API key + model. Returns null on success, or an error message string on failure.
+     * If model is null, uses the configured default.
+     */
+    public String testConnection(String apiKey, String model) {
+        try {
+            call(apiKey, model, buildRequest("Say hello", null));
             return null;
         } catch (Exception e) {
             log.warn("Gemini test connection failed: {}", e.getMessage());
@@ -55,26 +90,24 @@ public class GeminiApiService {
 
     /**
      * Runs the Contact Research Gem against the given Drive folder URL.
-     * Returns a structured list of prospect contacts extracted from the documents.
      */
-    public List<ProspectContactDto> generateContactList(String apiKey,
+    public List<ProspectContactDto> generateContactList(String apiKey, String model,
                                                         String systemInstructions,
                                                         String driveFolderUrl) {
         String prompt = buildContactResearchPrompt(driveFolderUrl);
-        String rawResponse = call(apiKey, buildRequest(prompt, systemInstructions));
+        String rawResponse = call(apiKey, model, buildRequest(prompt, systemInstructions));
         return parseContactList(rawResponse);
     }
 
     /**
      * Runs the Email Generation Gem for a single prospect contact.
-     * Returns 7 GeneratedEmailDto objects with subject, body, and scheduled datetime.
      */
-    public List<GeneratedEmailDto> generateEmails(String apiKey,
+    public List<GeneratedEmailDto> generateEmails(String apiKey, String model,
                                                   String systemInstructions,
                                                   ProspectContactDto contact,
                                                   List<LocalDateTime> schedule) {
         String prompt = buildEmailGenerationPrompt(contact, schedule);
-        String rawResponse = call(apiKey, buildRequest(prompt, systemInstructions));
+        String rawResponse = call(apiKey, model, buildRequest(prompt, systemInstructions));
         return parseEmailList(rawResponse, schedule);
     }
 
@@ -192,8 +225,9 @@ public class GeminiApiService {
 
     // ─── HTTP Call ────────────────────────────────────────────────────────────
 
-    private String call(String apiKey, String requestBody) {
-        String url = GEMINI_BASE + geminiModel + ":generateContent?key=" + apiKey;
+    private String call(String apiKey, String model, String requestBody) {
+        String resolvedModel = (model != null && !model.isBlank()) ? model : geminiModel;
+        String url = GEMINI_BASE + resolvedModel + ":generateContent?key=" + apiKey;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);

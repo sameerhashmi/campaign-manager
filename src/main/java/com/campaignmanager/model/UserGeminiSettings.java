@@ -29,6 +29,9 @@ public class UserGeminiSettings {
     @Column(name = "api_key", nullable = false, length = 500)
     private String apiKey;
 
+    @Column(name = "model", length = 100)
+    private String model;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

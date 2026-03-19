@@ -205,6 +205,32 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                   <mat-icon>delete</mat-icon>
                 </button>
               </div>
+
+              <!-- Model selection -->
+              <div style="margin-top:16px">
+                <div style="font-size:13px;color:#5f6368;margin-bottom:8px">
+                  Active model:
+                  <strong>{{ geminiStatus?.model || 'not configured — load and select below' }}</strong>
+                </div>
+                @if (availableModels.length > 0) {
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+                    <mat-form-field appearance="outline" style="min-width:280px">
+                      <mat-label>Select Model</mat-label>
+                      <mat-select [(ngModel)]="selectedModel">
+                        @for (m of availableModels; track m) {
+                          <mat-option [value]="m">{{ m }}</mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                    <button mat-raised-button color="primary"
+                            [disabled]="!selectedModel || savingModel"
+                            (click)="saveGeminiModel()">
+                      @if (savingModel) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
+                      Save Model
+                    </button>
+                  </div>
+                }
+              </div>
             } @else {
               <mat-form-field appearance="outline" style="width:100%;max-width:420px">
                 <mat-label>Gemini API Key</mat-label>
@@ -222,8 +248,16 @@ import { switchMap, takeWhile } from 'rxjs/operators';
                 Save Key
               </button>
             }
-            <button mat-stroked-button [disabled]="testingGemini || !geminiStatus?.connected"
-                    (click)="testGemini()" style="margin-left:8px">
+            @if (geminiStatus?.connected) {
+              <button mat-stroked-button [disabled]="loadingModels"
+                      (click)="loadGeminiModels()">
+                @if (loadingModels) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
+                <mat-icon>search</mat-icon> Load Available Models
+              </button>
+            }
+            <button mat-stroked-button [disabled]="testingGemini || !geminiStatus?.connected || !geminiStatus?.model"
+                    (click)="testGemini()" style="margin-left:8px"
+                    [matTooltip]="!geminiStatus?.model ? 'Load and save a model first' : ''">
               @if (testingGemini) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
               Test Connection
             </button>
@@ -418,10 +452,14 @@ export class SettingsComponent implements OnInit, OnDestroy {
   private pollSub?: Subscription;
 
   // Gemini
-  geminiStatus: { connected: boolean; maskedKey?: string } | null = null;
+  geminiStatus: { connected: boolean; maskedKey?: string; model?: string } | null = null;
   geminiApiKey = '';
   savingKey = false;
   testingGemini = false;
+  availableModels: string[] = [];
+  loadingModels = false;
+  selectedModel = '';
+  savingModel = false;
 
   // Gems
   gems: Gem[] = [];
@@ -631,7 +669,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   loadGeminiStatus(): void {
     this.http.get<any>('/api/settings/gemini').subscribe({
-      next: s => this.geminiStatus = s,
+      next: s => {
+        this.geminiStatus = s;
+        if (s.model) this.selectedModel = s.model;
+      },
       error: () => {}
     });
   }
@@ -677,6 +718,41 @@ export class SettingsComponent implements OnInit, OnDestroy {
       error: () => {
         this.testingGemini = false;
         this.snackBar.open('Test failed', 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  loadGeminiModels(): void {
+    this.loadingModels = true;
+    this.http.get<string[]>('/api/settings/gemini/models').subscribe({
+      next: models => {
+        this.availableModels = models;
+        this.loadingModels = false;
+        if (!this.selectedModel && models.length > 0) {
+          this.selectedModel = this.geminiStatus?.model ?? models[0];
+        }
+        if (models.length === 0) {
+          this.snackBar.open('No models returned. Check your API key.', 'Close', { duration: 5000 });
+        }
+      },
+      error: () => {
+        this.loadingModels = false;
+        this.snackBar.open('Failed to load models', 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  saveGeminiModel(): void {
+    this.savingModel = true;
+    this.http.post<any>('/api/settings/gemini/model', { model: this.selectedModel }).subscribe({
+      next: s => {
+        this.geminiStatus = s;
+        this.savingModel = false;
+        this.snackBar.open('Model saved: ' + this.selectedModel, '', { duration: 3000, panelClass: 'snack-success' });
+      },
+      error: () => {
+        this.savingModel = false;
+        this.snackBar.open('Failed to save model', 'Close', { duration: 4000 });
       }
     });
   }

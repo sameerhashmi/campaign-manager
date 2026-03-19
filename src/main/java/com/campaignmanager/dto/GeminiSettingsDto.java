@@ -6,4 +6,5 @@ import lombok.Data;
 public class GeminiSettingsDto {
     private boolean connected;
     private String maskedKey; // e.g. "••••••••1234"
+    private String model;     // currently saved model, null if not set
 }
