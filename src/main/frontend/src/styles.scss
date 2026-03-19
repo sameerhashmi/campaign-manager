@@ -316,7 +316,12 @@ html, body {
     &.has-file { border-color: #0ea5e9 !important; }
     &:hover { border-color: rgba(255,255,255,0.3) !important; }
   }
-  .drive-info { color: rgba(255,255,255,0.5) !important; }
+  .drive-info {
+    background: rgba(14,165,233,0.1) !important;
+    color: rgba(255,255,255,0.65) !important;
+    strong { color: rgba(255,255,255,0.87) !important; }
+  }
+  .drive-info-icon { color: #38bdf8 !important; }
   .doc-item {
     background: rgba(52,211,153,0.1) !important;
     color: rgba(255,255,255,0.8) !important;
@@ -360,8 +365,9 @@ html, body {
   /* Plain text buttons (Cancel, Back without color attr) */
   .mat-mdc-button:not([color]) { color: rgba(255,255,255,0.75) !important; }
 
-  /* Customer list selected row */
-  .selected-row { background: rgba(14,165,233,0.18) !important; }
+  /* Customer list selected row — must beat .mat-mdc-row:hover */
+  .selected-row,
+  .mat-mdc-row.selected-row:hover { background: rgba(14,165,233,0.22) !important; }
 
   /* Email Review 3-panel layout */
   .panel-contacts {
