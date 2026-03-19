@@ -79,21 +79,12 @@ async function main() {
         process.stdout.write('\n');
         console.log('Saving session...');
 
-        // Close every page except the main Gmail one before calling storageState.
-        // storageState() reads localStorage from ALL open pages — if Chat or any
-        // other tab is in a bad/loading state it will hang indefinitely.
-        for (const p of context.pages()) {
-          if (p !== page) {
-            try { await p.close(); } catch (_) {}
-          }
-        }
-
-        // storageState with a 10s timeout via Promise.race
-        const storageState = await Promise.race([
-          context.storageState(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('storageState timed out')), 10_000))
-        ]);
+        // context.storageState() hangs because it evaluates JS on every open
+        // page to read localStorage. Use context.cookies() instead — it reads
+        // directly from the browser cookie store without touching any page.
+        // The resulting format matches what Playwright's storageState produces.
+        const cookies = await context.cookies();
+        const storageState = { cookies, origins: [] };
 
         fs.writeFileSync(outputFile, JSON.stringify(storageState, null, 2));
         await browser.close();
