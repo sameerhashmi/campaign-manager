@@ -32,7 +32,7 @@ public class GeminiApiService {
     private static final String GEMINI_BASE =
         "https://generativelanguage.googleapis.com/v1beta/models/";
 
-    @Value("${gemini.model:gemini-2.0-flash}")
+    @Value("${gemini.model:gemini-1.5-flash}")
     private String geminiModel;
 
     private final RestTemplate restTemplate;
