@@ -48,23 +48,29 @@ async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
 
-  // Auto-close popup windows that aren't Gmail or Google login (e.g. Google Chat)
-  context.on('page', async (newPage) => {
+  // Auto-close popup windows that aren't Gmail or Google login (e.g. Google Chat).
+  // waitForURL(predicate) receives a URL object — using a poll loop instead to
+  // avoid the TypeError from calling string methods on a URL object.
+  async function closeIfNotGmail(newPage) {
     try {
-      // Wait until the page actually navigates away from about:blank — the URL
-      // is always about:blank at the moment the 'page' event fires, so checking
-      // immediately would always look like a safe page and skip the close.
-      await newPage.waitForURL(u => !u.startsWith('about:'), { timeout: 8000 });
-      const url = newPage.url();
+      let url = '';
+      for (let i = 0; i < 20; i++) {
+        url = newPage.url();
+        if (url && url !== 'about:blank' && url !== 'about:newtab') break;
+        await sleep(400);
+      }
       if (!url || url.startsWith('about:')) return;
       if (url.includes('mail.google.com') || url.includes('accounts.google.com')) return;
-      // Close anything else (Chat, Meet, Workspace, etc.)
       console.log('\n  [auto-close popup] ' + url.substring(0, 80));
       await newPage.close();
     } catch (_) {}
-  });
+  }
+
+  context.on('page', closeIfNotGmail);
 
   const page = await context.newPage();
+  // Also catch window.open() popups fired directly from the Gmail page
+  page.on('popup', closeIfNotGmail);
   await page.goto('https://mail.google.com');
 
   console.log('──────────────────────────────────────────────────────');
