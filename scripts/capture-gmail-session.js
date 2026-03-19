@@ -78,7 +78,23 @@ async function main() {
       } else {
         process.stdout.write('\n');
         console.log('Saving session...');
-        const storageState = await context.storageState();
+
+        // Close every page except the main Gmail one before calling storageState.
+        // storageState() reads localStorage from ALL open pages — if Chat or any
+        // other tab is in a bad/loading state it will hang indefinitely.
+        for (const p of context.pages()) {
+          if (p !== page) {
+            try { await p.close(); } catch (_) {}
+          }
+        }
+
+        // storageState with a 10s timeout via Promise.race
+        const storageState = await Promise.race([
+          context.storageState(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('storageState timed out')), 10_000))
+        ]);
+
         fs.writeFileSync(outputFile, JSON.stringify(storageState, null, 2));
         await browser.close();
         console.log('\n✓ Session saved to: ' + outputFile);
