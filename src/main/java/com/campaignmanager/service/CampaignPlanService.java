@@ -18,6 +18,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -146,7 +148,6 @@ public class CampaignPlanService {
 
     // ─── Generate Emails ─────────────────────────────────────────────────────
 
-    @Transactional
     public Map<Long, List<GeneratedEmailDto>> generateEmails(Long planId,
                                                              List<Long> selectedContactIds,
                                                              Authentication auth) {
@@ -158,49 +159,59 @@ public class CampaignPlanService {
                     "No Email Generation Gem selected.");
         }
 
-        // Mark selected contacts
-        List<ProspectContact> contacts = prospectContactRepository.findAllByCampaignPlanOrderByName(plan);
-        for (ProspectContact pc : contacts) {
-            boolean selected = selectedContactIds.contains(pc.getId());
-            pc.setSelected(selected);
+        // Mark selected contacts and clear old emails
+        List<ProspectContact> allContacts = prospectContactRepository.findAllByCampaignPlanOrderByName(plan);
+        List<ProspectContact> selected = new ArrayList<>();
+        for (ProspectContact pc : allContacts) {
+            boolean sel = selectedContactIds.contains(pc.getId());
+            pc.setSelected(sel);
             prospectContactRepository.save(pc);
+            if (sel) {
+                generatedEmailRepository.deleteAllByProspectContact(pc);
+                selected.add(pc);
+            }
         }
 
         List<LocalDateTime> schedule = EmailScheduleCalculator.calculateSchedule(LocalDate.now());
-        Map<Long, List<GeneratedEmailDto>> result = new LinkedHashMap<>();
 
-        // Load document corpus once; reuse for all contacts
+        // Load document corpus once
         List<CampaignPlanDocument> docs = documentRepository.findAllByCampaignPlan(plan);
         String corpus = documentTextExtractorService.extractAll(docs);
         String emailSystemInstructions = plan.getEmailGem().getSystemInstructions();
+        String apiKey = geminiSettings.getApiKey();
+        String model = geminiSettings.getModel();
 
-        for (ProspectContact pc : contacts) {
-            if (!selectedContactIds.contains(pc.getId())) continue;
-
-            // Clear old emails for this contact
-            generatedEmailRepository.deleteAllByProspectContact(pc);
-
+        // Call Gemini for all contacts in parallel to stay within HTTP timeout
+        Map<Long, CompletableFuture<List<GeneratedEmailDto>>> futures = new LinkedHashMap<>();
+        for (ProspectContact pc : selected) {
             ProspectContactDto contactDto = toProspectDto(pc);
-            List<GeneratedEmailDto> emails = geminiApiService.generateEmails(
-                    geminiSettings.getApiKey(),
-                    geminiSettings.getModel(),
-                    emailSystemInstructions,
-                    contactDto,
-                    schedule,
-                    corpus);
+            futures.put(pc.getId(), CompletableFuture.supplyAsync(() ->
+                    geminiApiService.generateEmails(apiKey, model, emailSystemInstructions,
+                            contactDto, schedule, corpus)));
+        }
 
-            List<GeneratedEmail> saved = emails.stream().map(dto -> {
-                GeneratedEmail ge = new GeneratedEmail();
-                ge.setProspectContact(pc);
-                ge.setStepNumber(dto.getStepNumber());
-                ge.setSubject(dto.getSubject());
-                ge.setBody(dto.getBody());
-                ge.setScheduledAt(dto.getScheduledAt() != null ? dto.getScheduledAt()
-                        : (dto.getStepNumber() <= schedule.size() ? schedule.get(dto.getStepNumber() - 1) : null));
-                return generatedEmailRepository.save(ge);
-            }).collect(Collectors.toList());
-
-            result.put(pc.getId(), saved.stream().map(this::toEmailDto).collect(Collectors.toList()));
+        // Collect results and save to DB (75s timeout total)
+        Map<Long, List<GeneratedEmailDto>> result = new LinkedHashMap<>();
+        for (ProspectContact pc : selected) {
+            try {
+                List<GeneratedEmailDto> emails = futures.get(pc.getId()).get(75, TimeUnit.SECONDS);
+                List<GeneratedEmail> saved = emails.stream().map(dto -> {
+                    GeneratedEmail ge = new GeneratedEmail();
+                    ge.setProspectContact(pc);
+                    ge.setStepNumber(dto.getStepNumber());
+                    ge.setSubject(dto.getSubject());
+                    ge.setBody(dto.getBody());
+                    ge.setScheduledAt(dto.getScheduledAt() != null ? dto.getScheduledAt()
+                            : (dto.getStepNumber() <= schedule.size() ? schedule.get(dto.getStepNumber() - 1) : null));
+                    return generatedEmailRepository.save(ge);
+                }).collect(Collectors.toList());
+                result.put(pc.getId(), saved.stream().map(this::toEmailDto).collect(Collectors.toList()));
+            } catch (Exception e) {
+                log.error("Email generation failed for contact {}: {}", pc.getName(), e.getMessage());
+                Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Email generation failed for " + pc.getName() + ": " + cause.getMessage());
+            }
         }
 
         plan.setStatus("EMAILS_READY");
