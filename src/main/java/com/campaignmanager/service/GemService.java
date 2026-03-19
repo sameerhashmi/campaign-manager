@@ -105,7 +105,7 @@ public class GemService {
         result.put("type", gem.getGemType());
 
         if ("CONTACT_RESEARCH".equals(gem.getGemType())) {
-            List<ProspectContactDto> contacts = geminiApiService.generateContactList(
+            List<ProspectContactDto> contacts = geminiApiService.generateContactListChunked(
                     settings.getApiKey(), settings.getModel(), gem.getSystemInstructions(), corpus);
             result.put("contacts", contacts);
         } else {

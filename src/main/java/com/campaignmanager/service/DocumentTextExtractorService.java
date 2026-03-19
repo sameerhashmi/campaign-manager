@@ -41,6 +41,8 @@ public class DocumentTextExtractorService {
                 } else {
                     corpus.append(text);
                 }
+            } else {
+                log.debug("No text extracted from '{}'", doc.getOriginalFileName());
             }
         }
         return corpus.toString();

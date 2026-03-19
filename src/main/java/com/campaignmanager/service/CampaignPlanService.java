@@ -116,7 +116,7 @@ public class CampaignPlanService {
         // Clear previous results
         prospectContactRepository.deleteAllByCampaignPlan(plan);
 
-        List<ProspectContactDto> generated = geminiApiService.generateContactList(
+        List<ProspectContactDto> generated = geminiApiService.generateContactListChunked(
                 geminiSettings.getApiKey(),
                 geminiSettings.getModel(),
                 plan.getContactGem().getSystemInstructions(),

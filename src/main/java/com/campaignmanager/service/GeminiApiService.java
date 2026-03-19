@@ -15,8 +15,13 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Calls the Google Gemini REST API to generate prospect contacts and email sequences.
@@ -26,6 +31,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class GeminiApiService {
+
+    private static final int CHUNK_SIZE = 15_000;
 
     private static final String GEMINI_BASE =
         "https://generativelanguage.googleapis.com/v1beta/models/";
@@ -95,6 +102,101 @@ public class GeminiApiService {
         String prompt = buildContactResearchPrompt(documentCorpus);
         String rawResponse = call(apiKey, model, buildRequest(prompt, systemInstructions));
         return parseContactList(rawResponse);
+    }
+
+    /**
+     * Splits corpus into ≤15k-char chunks, runs generateContactList in parallel per chunk,
+     * then merges and deduplicates by normalized name.
+     * Falls back to single-call path when corpus is already small enough.
+     */
+    public List<ProspectContactDto> generateContactListChunked(String apiKey, String model,
+                                                               String systemInstructions,
+                                                               String corpus) {
+        if (corpus == null || corpus.isBlank()) {
+            return generateContactList(apiKey, model, systemInstructions, corpus);
+        }
+        List<String> chunks = splitCorpus(corpus, CHUNK_SIZE);
+        if (chunks.size() <= 1) {
+            return generateContactList(apiKey, model, systemInstructions, corpus);
+        }
+
+        log.info("Chunked extraction: corpus {} chars → {} chunks", corpus.length(), chunks.size());
+
+        List<CompletableFuture<List<ProspectContactDto>>> futures = chunks.stream()
+                .map(chunk -> CompletableFuture.supplyAsync(
+                        () -> generateContactList(apiKey, model, systemInstructions, chunk)))
+                .collect(Collectors.toList());
+
+        List<ProspectContactDto> merged = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (CompletableFuture<List<ProspectContactDto>> future : futures) {
+            try {
+                List<ProspectContactDto> batch = future.get(90, TimeUnit.SECONDS);
+                for (ProspectContactDto dto : batch) {
+                    String key = normalizeName(dto.getName());
+                    if (!key.isBlank() && seen.add(key)) {
+                        merged.add(dto);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Chunk failed, skipping: {}", e.getMessage());
+            }
+        }
+
+        log.info("Chunked extraction complete: {} contacts from {} chunks", merged.size(), chunks.size());
+        return merged;
+    }
+
+    // ─── Chunk Splitting ──────────────────────────────────────────────────────
+
+    private List<String> splitCorpus(String corpus, int maxChunkSize) {
+        if (corpus.length() <= maxChunkSize) return List.of(corpus);
+
+        // Split at document boundaries first (keeps doc headers with their content)
+        String[] sections = corpus.split("(?=\\n\\n=== Document:)");
+
+        List<String> chunks = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String section : sections) {
+            if (section.length() > maxChunkSize) {
+                // Flush current accumulator first
+                if (current.length() > 0) {
+                    chunks.add(current.toString().trim());
+                    current = new StringBuilder();
+                }
+                splitLargeSection(section, maxChunkSize, chunks);
+            } else if (current.length() + section.length() > maxChunkSize) {
+                chunks.add(current.toString().trim());
+                current = new StringBuilder(section);
+            } else {
+                current.append(section);
+            }
+        }
+        if (current.length() > 0) chunks.add(current.toString().trim());
+        return chunks;
+    }
+
+    private void splitLargeSection(String section, int maxChunkSize, List<String> out) {
+        int pos = 0;
+        while (pos < section.length()) {
+            int end = Math.min(pos + maxChunkSize, section.length());
+            if (end < section.length()) {
+                int breakAt = section.lastIndexOf("\n\n", end);
+                if (breakAt > pos) {
+                    end = breakAt;
+                } else {
+                    int lineBreak = section.lastIndexOf('\n', end);
+                    if (lineBreak > pos) end = lineBreak;
+                }
+            }
+            String piece = section.substring(pos, end).trim();
+            if (!piece.isBlank()) out.add(piece);
+            pos = end;
+        }
+    }
+
+    private String normalizeName(String name) {
+        return name == null ? "" : name.toLowerCase().trim().replaceAll("\\s+", " ");
     }
 
     /**
