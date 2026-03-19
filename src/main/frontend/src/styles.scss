@@ -93,7 +93,7 @@ html, body {
   .content-area { background: #0d1117; }
 
   /* ── Page layout ──────────────────────────────────────── */
-  .page-header h1 { color: rgba(255,255,255,0.92); }
+  .page-header h1 { color: rgba(255,255,255,0.92) !important; }
 
   /* ── Cards ────────────────────────────────────────────── */
   .mat-mdc-card {
@@ -351,6 +351,65 @@ html, body {
   /* Recipient email field */
   .recipient-email-field .mat-mdc-input-element { color: rgba(255,255,255,0.87) !important; }
   .recipient-name { color: rgba(255,255,255,0.87) !important; }
+
+  /* Dashboard stat cards */
+  .stat-value { color: rgba(255,255,255,0.95) !important; }
+  .stat-sub   { color: rgba(255,255,255,0.4) !important; }
+  .expand-hint mat-icon { color: rgba(255,255,255,0.2) !important; }
+
+  /* Plain text buttons (Cancel, Back without color attr) */
+  .mat-mdc-button:not([color]) { color: rgba(255,255,255,0.75) !important; }
+
+  /* Customer list selected row */
+  .selected-row { background: rgba(14,165,233,0.18) !important; }
+
+  /* Email Review 3-panel layout */
+  .panel-contacts {
+    background: #161d2c !important;
+    border-right-color: rgba(255,255,255,0.08) !important;
+  }
+  .panel-emails {
+    background: #1a2130 !important;
+    border-right-color: rgba(255,255,255,0.08) !important;
+  }
+  .panel-editor { background: #1e2536 !important; }
+  .panel-header {
+    color: rgba(255,255,255,0.55) !important;
+    border-bottom-color: rgba(255,255,255,0.07) !important;
+    background: transparent !important;
+  }
+  .panel-empty { color: rgba(255,255,255,0.3) !important; }
+
+  .contact-item {
+    border-bottom-color: rgba(255,255,255,0.05) !important;
+    &:hover { background: rgba(14,165,233,0.08) !important; }
+    &.active {
+      background: rgba(14,165,233,0.15) !important;
+      border-left-color: #0ea5e9 !important;
+    }
+  }
+  .contact-item-name  { color: rgba(255,255,255,0.87) !important; }
+  .contact-item-sub   { color: rgba(255,255,255,0.45) !important; }
+  .contact-item-email { color: #38bdf8 !important; }
+
+  .email-item {
+    border-bottom-color: rgba(255,255,255,0.05) !important;
+    &:hover { background: rgba(255,255,255,0.04) !important; }
+    &.active {
+      background: rgba(14,165,233,0.15) !important;
+      border-left-color: #0ea5e9 !important;
+    }
+  }
+  .email-item-step    { color: #38bdf8 !important; }
+  .email-item-date    { color: rgba(255,255,255,0.4) !important; }
+  .email-item-subject { color: rgba(255,255,255,0.75) !important; }
+
+  .email-recipient {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+  }
+  .recipient-name  { color: rgba(255,255,255,0.87) !important; }
+  .schedule-info   { color: rgba(255,255,255,0.45) !important; }
 
   /* Dashboard */
   .gmail-warning {
