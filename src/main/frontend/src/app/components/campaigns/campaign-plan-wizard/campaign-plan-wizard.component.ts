@@ -265,11 +265,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                   </div>
                 </div>
               } @else {
-                <div class="edit-tip">
-                  <mat-icon>edit</mat-icon>
-                  Click any cell to edit inline. Emails are auto-generated from your format — update them here if needed.
-                </div>
-
                 <div class="table-toolbar">
                   <p class="step-desc">{{ contacts.length }} contact(s) found. Select who to include.</p>
                   <div class="toolbar-actions">
@@ -291,63 +286,27 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                     </ng-container>
                     <ng-container matColumnDef="name">
                       <th mat-header-cell *matHeaderCellDef>Name</th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <input class="inline-input" [(ngModel)]="c.name" (blur)="saveContact(c)">
-                        } @else {
-                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.name }}</span>
-                        }
-                      </td>
+                      <td mat-cell *matCellDef="let c">{{ c.name }}</td>
                     </ng-container>
                     <ng-container matColumnDef="title">
                       <th mat-header-cell *matHeaderCellDef>Title</th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <input class="inline-input" [(ngModel)]="c.title" (blur)="saveContact(c)">
-                        } @else {
-                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.title }}</span>
-                        }
-                      </td>
+                      <td mat-cell *matCellDef="let c">{{ c.title }}</td>
                     </ng-container>
                     <ng-container matColumnDef="email">
                       <th mat-header-cell *matHeaderCellDef>Email</th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <input class="inline-input" [(ngModel)]="c.email" (blur)="saveContact(c)">
-                        } @else {
-                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.email || '—' }}</span>
-                        }
-                      </td>
+                      <td mat-cell *matCellDef="let c">{{ c.email || '—' }}</td>
                     </ng-container>
                     <ng-container matColumnDef="roleType">
                       <th mat-header-cell *matHeaderCellDef>Role Type</th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <input class="inline-input" [(ngModel)]="c.roleType" (blur)="saveContact(c)">
-                        } @else {
-                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.roleType }}</span>
-                        }
-                      </td>
+                      <td mat-cell *matCellDef="let c">{{ c.roleType }}</td>
                     </ng-container>
                     <ng-container matColumnDef="teamDomain">
                       <th mat-header-cell *matHeaderCellDef>Team / Domain</th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <input class="inline-input" [(ngModel)]="c.teamDomain" (blur)="saveContact(c)">
-                        } @else {
-                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.teamDomain }}</span>
-                        }
-                      </td>
+                      <td mat-cell *matCellDef="let c">{{ c.teamDomain }}</td>
                     </ng-container>
                     <ng-container matColumnDef="senioritySignal">
                       <th mat-header-cell *matHeaderCellDef>Seniority</th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <input class="inline-input" [(ngModel)]="c.senioritySignal" (blur)="saveContact(c)">
-                        } @else {
-                          <span class="editable-cell" (click)="startEditContact(c)">{{ c.senioritySignal }}</span>
-                        }
-                      </td>
+                      <td mat-cell *matCellDef="let c">{{ c.senioritySignal }}</td>
                     </ng-container>
                     <ng-container matColumnDef="tanzuRelevance">
                       <th mat-header-cell *matHeaderCellDef>Tanzu Relevance</th>
@@ -360,20 +319,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                     <ng-container matColumnDef="source">
                       <th mat-header-cell *matHeaderCellDef>Source</th>
                       <td mat-cell *matCellDef="let c">{{ c.source }}</td>
-                    </ng-container>
-                    <ng-container matColumnDef="actions">
-                      <th mat-header-cell *matHeaderCellDef style="width:48px"></th>
-                      <td mat-cell *matCellDef="let c">
-                        @if (editingContactId === c.id) {
-                          <button mat-icon-button (click)="saveContact(c)" matTooltip="Done editing" style="color:#188038">
-                            <mat-icon style="font-size:18px">check</mat-icon>
-                          </button>
-                        } @else {
-                          <button mat-icon-button (click)="startEditContact(c)" matTooltip="Edit row" style="color:#5f6368">
-                            <mat-icon style="font-size:18px">edit</mat-icon>
-                          </button>
-                        }
-                      </td>
                     </ng-container>
                     <tr mat-header-row *matHeaderRowDef="contactColumns; sticky: true"></tr>
                     <tr mat-row *matRowDef="let row; columns: contactColumns;"
@@ -452,6 +397,17 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                       <div class="panel-empty">Select an email to edit</div>
                     } @else {
                       <div class="email-editor">
+                        @if (activeContact) {
+                          <div class="email-recipient">
+                            <mat-icon>person</mat-icon>
+                            <div>
+                              <span class="recipient-name">{{ activeContact.name }}</span>
+                              @if (activeContact.email) {
+                                <span class="recipient-email">&lt;{{ activeContact.email }}&gt;</span>
+                              }
+                            </div>
+                          </div>
+                        }
                         <mat-form-field appearance="outline" class="full-width">
                           <mat-label>Subject</mat-label>
                           <input matInput [(ngModel)]="activeEmail.subject"
@@ -497,54 +453,91 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                   <p>Loading summary…</p>
                 </div>
               } @else if (summary) {
-                <mat-card class="summary-card">
-                  <mat-card-content>
-                    <div class="summary-grid">
-                      <div class="summary-row">
-                        <span class="summary-label">Campaign</span>
-                        <span class="summary-value">{{ summary.campaignName }}</span>
-                      </div>
-                      <div class="summary-row">
-                        <span class="summary-label">Customer</span>
-                        <span class="summary-value">{{ summary.customer }}</span>
-                      </div>
-                      @if (summary.tanzuContact) {
-                        <div class="summary-row">
-                          <span class="summary-label">Tanzu Specialist</span>
-                          <span class="summary-value">{{ summary.tanzuContact }}</span>
-                        </div>
-                      }
-                      <div class="summary-row">
-                        <span class="summary-label">Contact Gem</span>
-                        <span class="summary-value">{{ summary.contactGemName }}</span>
-                      </div>
-                      <div class="summary-row">
-                        <span class="summary-label">Email Gem</span>
-                        <span class="summary-value">{{ summary.emailGemName }}</span>
-                      </div>
-                      <mat-divider></mat-divider>
-                      <div class="summary-row highlight">
-                        <span class="summary-label">Contacts Selected</span>
-                        <span class="summary-value">{{ summary.contactCount }}</span>
-                      </div>
-                      <div class="summary-row highlight">
-                        <span class="summary-label">Emails to Schedule</span>
-                        <span class="summary-value">{{ summary.emailCount }}</span>
-                      </div>
-                      @if (summary.scheduleStart) {
-                        <div class="summary-row highlight">
-                          <span class="summary-label">Schedule Range</span>
-                          <span class="summary-value">{{ summary.scheduleStart }} → {{ summary.scheduleEnd }}</span>
-                        </div>
-                      }
-                    </div>
-                  </mat-card-content>
-                </mat-card>
+                <div class="summary-wrapper">
 
-                <p class="summary-note">
-                  Clicking <strong>Save Campaign</strong> will create the campaign with all contacts and
-                  scheduled emails. Use the Launch button on the campaign detail page to start sending.
-                </p>
+                  <!-- Hero -->
+                  <div class="summary-hero">
+                    <div class="summary-hero-icon">
+                      <mat-icon>campaign</mat-icon>
+                    </div>
+                    <div>
+                      <div class="summary-hero-title">{{ summary.campaignName }}</div>
+                      <div class="summary-hero-sub">{{ summary.customer }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Stats row -->
+                  <div class="summary-stats">
+                    <div class="stat-card">
+                      <div class="stat-number">{{ summary.contactCount }}</div>
+                      <div class="stat-label">Contacts</div>
+                    </div>
+                    <div class="stat-card">
+                      <div class="stat-number">{{ summary.emailCount }}</div>
+                      <div class="stat-label">Emails Scheduled</div>
+                    </div>
+                    @if (summary.scheduleStart) {
+                      <div class="stat-card stat-card-date">
+                        <div class="stat-number stat-date">{{ summary.scheduleStart }}</div>
+                        <div class="stat-label">Campaign Starts</div>
+                      </div>
+                      <div class="stat-card stat-card-date">
+                        <div class="stat-number stat-date">{{ summary.scheduleEnd }}</div>
+                        <div class="stat-label">Last Email Sent</div>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Details -->
+                  <div class="summary-details">
+                    @if (summary.tanzuContact) {
+                      <div class="detail-row">
+                        <mat-icon class="detail-icon">person</mat-icon>
+                        <div>
+                          <div class="detail-label">Tanzu Specialist</div>
+                          <div class="detail-value">{{ summary.tanzuContact }}</div>
+                        </div>
+                      </div>
+                    }
+                    <div class="detail-row">
+                      <mat-icon class="detail-icon">auto_awesome</mat-icon>
+                      <div>
+                        <div class="detail-label">Contact Research Gem</div>
+                        <div class="detail-value">{{ summary.contactGemName }}</div>
+                      </div>
+                    </div>
+                    <div class="detail-row">
+                      <mat-icon class="detail-icon">mail_outline</mat-icon>
+                      <div>
+                        <div class="detail-label">Email Generation Gem</div>
+                        <div class="detail-value">{{ summary.emailGemName }}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Contact chips -->
+                  <div class="summary-section-title">Selected Contacts</div>
+                  <div class="contact-chips">
+                    @for (c of selectedContacts; track c.id) {
+                      <div class="contact-chip">
+                        <div class="contact-chip-avatar">{{ c.name.charAt(0).toUpperCase() }}</div>
+                        <div class="contact-chip-info">
+                          <div class="contact-chip-name">{{ c.name }}</div>
+                          <div class="contact-chip-sub">{{ c.title }}</div>
+                          @if (c.email) {
+                            <div class="contact-chip-email">{{ c.email }}</div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+
+                  <div class="summary-note">
+                    <mat-icon style="font-size:16px;flex-shrink:0;margin-top:2px">info_outline</mat-icon>
+                    <span>Clicking <strong>Save Campaign</strong> creates the campaign with all contacts and scheduled emails.
+                    Use the <strong>Launch</strong> button on the campaign detail page to start sending.</span>
+                  </div>
+                </div>
               }
 
               <div class="step-actions">
@@ -607,14 +600,6 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
     .toolbar-actions { display: flex; gap: 8px; }
     .contacts-table-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }
     .contacts-table { width: 100%; min-width: 900px; }
-    .editable-cell {
-      cursor: pointer; padding: 2px 4px; border-radius: 3px;
-      &:hover { background: #e8f0fe; }
-    }
-    .inline-input {
-      border: 1px solid #1a73e8; border-radius: 4px; padding: 4px 6px;
-      font-size: 14px; width: 120px; outline: none;
-    }
     .selected-row { background: #e8f0fe; }
     .selected-count { margin-top: 8px; font-size: 13px; color: #5f6368; }
     .relevance-high   { color: #137333; font-weight: 600; }
@@ -663,6 +648,14 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       font-size: 13px; color: #5f6368;
       mat-icon { font-size: 16px; width: 16px; height: 16px; }
     }
+    .email-recipient {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #f8f9fa; border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      mat-icon { color: #5f6368; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    }
+    .recipient-name { font-size: 13px; font-weight: 600; color: #202124; }
+    .recipient-email { font-size: 12px; color: #1a73e8; margin-left: 6px; }
 
     /* Step 1 card — two-column layout */
     .step1-card { max-width: 1040px; }
@@ -714,21 +707,67 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
       &.pending { background: #e8f0fe; mat-icon.doc-icon { color: #1a73e8; } }
     }
     .doc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .edit-tip {
-      display: flex; align-items: center; gap: 8px;
-      background: #e8f0fe; padding: 10px 14px; border-radius: 8px;
-      font-size: 13px; color: #3c4043; margin-bottom: 8px;
-      mat-icon { font-size: 16px; width: 16px; height: 16px; color: #1a73e8; flex-shrink: 0; }
-    }
 
     /* Summary */
-    .summary-card { max-width: 520px; margin-bottom: 16px; }
-    .summary-grid { display: flex; flex-direction: column; gap: 12px; }
-    .summary-row { display: flex; justify-content: space-between; align-items: center; }
-    .summary-label { font-size: 13px; color: #5f6368; }
-    .summary-value { font-size: 14px; font-weight: 500; color: #202124; }
-    .summary-row.highlight .summary-value { font-size: 18px; color: #1a73e8; }
-    .summary-note { font-size: 13px; color: #5f6368; max-width: 520px; }
+    .summary-wrapper { max-width: 780px; }
+    .summary-hero {
+      display: flex; align-items: center; gap: 18px;
+      background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+      border-radius: 14px; padding: 24px 28px; margin-bottom: 20px; color: white;
+    }
+    .summary-hero-icon {
+      width: 54px; height: 54px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0;
+      mat-icon { font-size: 30px; width: 30px; height: 30px; color: white; }
+    }
+    .summary-hero-title { font-size: 22px; font-weight: 700; }
+    .summary-hero-sub { font-size: 14px; opacity: 0.85; margin-top: 4px; }
+    .summary-stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+    .stat-card {
+      flex: 1; min-width: 100px; background: #f8f9fa;
+      border-radius: 10px; padding: 16px 20px; text-align: center;
+      border: 1px solid #e0e0e0;
+    }
+    .stat-card-date { min-width: 160px; }
+    .stat-number { font-size: 32px; font-weight: 700; color: #1a73e8; line-height: 1; }
+    .stat-date { font-size: 15px; }
+    .stat-label { font-size: 11px; color: #5f6368; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .summary-details {
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+      padding: 4px 16px; margin-bottom: 20px;
+    }
+    .detail-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 0; border-bottom: 1px solid #f1f3f4;
+      &:last-child { border-bottom: none; }
+    }
+    .detail-icon { color: #5f6368; font-size: 20px; width: 20px; height: 20px; flex-shrink: 0; }
+    .detail-label { font-size: 11px; color: #9aa0a6; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+    .detail-value { font-size: 14px; color: #202124; font-weight: 500; margin-top: 2px; }
+    .summary-section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      color: #5f6368; letter-spacing: 0.5px; margin-bottom: 12px;
+    }
+    .contact-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .contact-chip {
+      display: flex; align-items: center; gap: 10px;
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+      padding: 10px 14px; min-width: 210px; flex: 1; max-width: 360px;
+    }
+    .contact-chip-avatar {
+      width: 38px; height: 38px; border-radius: 50%; background: #e8f0fe;
+      color: #1a73e8; font-size: 17px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .contact-chip-name { font-size: 14px; font-weight: 600; color: #202124; }
+    .contact-chip-sub { font-size: 12px; color: #5f6368; margin-top: 1px; }
+    .contact-chip-email { font-size: 11px; color: #1a73e8; margin-top: 1px; word-break: break-all; }
+    .summary-note {
+      display: flex; align-items: flex-start; gap: 8px;
+      font-size: 13px; color: #5f6368; max-width: 780px;
+      background: #f8f9fa; border-radius: 8px; padding: 12px 16px;
+    }
   `]
 })
 export class CampaignPlanWizardComponent implements OnInit {
@@ -751,12 +790,13 @@ export class CampaignPlanWizardComponent implements OnInit {
   editingContactId: number | null = null;
   step2Completed = false;
 
-  contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance', 'source', 'actions'];
+  contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance', 'source'];
 
   generatingEmails = false;
   emailGenError: string | null = null;
   emailsByContact: { [contactId: number]: GeneratedEmail[] } = {};
   activeContactId: number | null = null;
+  activeContact: ProspectContact | null = null;
   activeEmails: GeneratedEmail[] = [];
   activeEmailId: number | null = null;
   activeEmail: GeneratedEmail | null = null;
@@ -1035,6 +1075,7 @@ export class CampaignPlanWizardComponent implements OnInit {
 
   selectContact(contact: ProspectContact): void {
     this.activeContactId = contact.id ?? null;
+    this.activeContact = contact;
     this.activeEmails = this.emailsByContact[contact.id!] ?? [];
     this.activeEmail = null;
     this.activeEmailId = null;
