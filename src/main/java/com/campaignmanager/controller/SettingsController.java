@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -299,8 +300,11 @@ public class SettingsController {
         User user = resolveUser(auth);
         return geminiSettingsRepository.findByUser(user)
                 .map(s -> {
-                    boolean ok = geminiApiService.testConnection(s.getApiKey());
-                    return ResponseEntity.ok(Map.<String, Object>of("ok", ok));
+                    String error = geminiApiService.testConnection(s.getApiKey());
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("ok", error == null);
+                    if (error != null) result.put("error", error);
+                    return ResponseEntity.ok(result);
                 })
                 .orElseGet(() -> ResponseEntity.ok(
                         Map.of("ok", false, "error", "No API key saved. Add your Gemini API key first.")));

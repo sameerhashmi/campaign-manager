@@ -8,8 +8,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
@@ -27,22 +29,27 @@ import java.util.Map;
 @Slf4j
 public class GeminiApiService {
 
-    private static final String GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=";
+    private static final String GEMINI_BASE =
+        "https://generativelanguage.googleapis.com/v1beta/models/";
+
+    @Value("${gemini.model:gemini-2.0-flash}")
+    private String geminiModel;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
     // ─── Public API ───────────────────────────────────────────────────────────
 
-    public boolean testConnection(String apiKey) {
+    /**
+     * Tests the API key. Returns null on success, or an error message string on failure.
+     */
+    public String testConnection(String apiKey) {
         try {
-            String body = buildRequest("Say hello", null);
-            call(apiKey, body);
-            return true;
+            call(apiKey, buildRequest("Say hello", null));
+            return null;
         } catch (Exception e) {
             log.warn("Gemini test connection failed: {}", e.getMessage());
-            return false;
+            return e.getMessage();
         }
     }
 
@@ -186,17 +193,31 @@ public class GeminiApiService {
     // ─── HTTP Call ────────────────────────────────────────────────────────────
 
     private String call(String apiKey, String requestBody) {
+        String url = GEMINI_BASE + geminiModel + ":generateContent?key=" + apiKey;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
-
-        ResponseEntity<String> response = restTemplate.exchange(
-            GEMINI_URL + apiKey, HttpMethod.POST, entity, String.class);
-
-        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-            throw new RuntimeException("Gemini API returned status: " + response.getStatusCode());
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity, String.class);
+            if (response.getBody() == null) {
+                throw new RuntimeException("Gemini returned an empty response");
+            }
+            return extractText(response.getBody());
+        } catch (HttpClientErrorException e) {
+            // Extract the actual error message from Gemini's JSON error body
+            String raw = e.getResponseBodyAsString();
+            try {
+                JsonNode err = objectMapper.readTree(raw);
+                String msg = err.path("error").path("message").asText(null);
+                if (msg != null && !msg.isBlank()) {
+                    throw new RuntimeException(msg);
+                }
+            } catch (RuntimeException re) {
+                throw re;
+            } catch (Exception ignored) {}
+            throw new RuntimeException("Gemini API error " + e.getStatusCode().value() + ": " + raw);
         }
-        return extractText(response.getBody());
     }
 
     private String extractText(String responseJson) {
