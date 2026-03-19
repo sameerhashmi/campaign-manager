@@ -30,7 +30,7 @@ import java.util.Map;
 public class GeminiApiService {
 
     private static final String GEMINI_BASE =
-        "https://generativelanguage.googleapis.com/v1beta/models/";
+        "https://generativelanguage.googleapis.com/v1/models/";
 
     @Value("${gemini.model:gemini-1.5-flash}")
     private String geminiModel;
