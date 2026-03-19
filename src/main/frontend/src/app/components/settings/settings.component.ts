@@ -159,32 +159,6 @@ import { switchMap, takeWhile } from 'rxjs/operators';
           </mat-card-actions>
         </mat-card>
 
-        <!-- How it works -->
-        <mat-card class="info-card">
-          <mat-card-header>
-            <mat-card-title>How Gmail Sessions Work</mat-card-title>
-          </mat-card-header>
-          <mat-card-content>
-            <p class="section-heading">Running locally (normal setup)</p>
-            <ol class="steps-list">
-              <li>Click <strong>Add Gmail Account</strong> — a Chrome browser window opens.</li>
-              <li>Log into the Gmail account you want to send from.</li>
-              <li>Once you reach the Gmail inbox the session is saved automatically.</li>
-              <li>Repeat for each additional Gmail account you want to use.</li>
-              <li>When creating a campaign, choose which account to send from.</li>
-            </ol>
-            <p class="section-heading" style="margin-top:16px">Running in a headless / cloud environment (e.g. Cloud Foundry)</p>
-            <ol class="steps-list">
-              <li>Run the app locally: <code>java -jar campaign-manager-1.0.0.jar</code></li>
-              <li>Go to <strong>http://localhost:8080 → Settings → Add Gmail Account</strong> and log in.</li>
-              <li>The session is saved to <code>./data/sessions/&#123;email&#125;.json</code>.</li>
-              <li>Upload that file here using <strong>Upload Session File</strong>.</li>
-            </ol>
-          </mat-card-content>
-        </mat-card>
-
-
-
         <!-- Gemini API Key Card (admin only) -->
         @if (isAdmin) {
         <mat-card class="settings-card">

@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AuthService } from '../../../services/auth.service';
+import { ThemeService } from '../../../services/theme.service';
 
 @Component({
   selector: 'app-nav',
@@ -37,10 +38,16 @@ import { AuthService } from '../../../services/auth.service';
               </div>
             }
           </div>
-          <button class="collapse-btn" (click)="collapsed = !collapsed"
-                  [matTooltip]="collapsed ? 'Expand' : 'Collapse'" matTooltipPosition="right">
-            <mat-icon>{{ collapsed ? 'chevron_right' : 'chevron_left' }}</mat-icon>
-          </button>
+          <div style="display:flex;align-items:center;gap:2px">
+            <button class="collapse-btn" (click)="themeService.toggle()"
+                    [matTooltip]="themeService.isDark ? 'Light mode' : 'Dark mode'" matTooltipPosition="right">
+              <mat-icon>{{ themeService.isDark ? 'light_mode' : 'dark_mode' }}</mat-icon>
+            </button>
+            <button class="collapse-btn" (click)="collapsed = !collapsed"
+                    [matTooltip]="collapsed ? 'Expand' : 'Collapse'" matTooltipPosition="right">
+              <mat-icon>{{ collapsed ? 'chevron_right' : 'chevron_left' }}</mat-icon>
+            </button>
+          </div>
         </div>
 
         <!-- Nav Items -->
@@ -340,7 +347,11 @@ export class NavComponent {
     return this.username ? this.username[0].toUpperCase() : '?';
   }
 
-  constructor(private auth: AuthService, private router: Router) {}
+  constructor(
+    private auth: AuthService,
+    private router: Router,
+    public themeService: ThemeService
+  ) {}
 
   logout(): void {
     this.auth.logout();

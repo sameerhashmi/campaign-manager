@@ -69,7 +69,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     <div class="stat-label">Total Campaigns</div>
                     <div class="stat-sub">{{ stats.activeCampaigns }} active · {{ stats.draftCampaigns }} draft</div>
                   </div>
-                  <mat-icon class="stat-icon" style="color:#38bdf8">campaign</mat-icon>
+                  <mat-icon class="stat-icon" style="color:#1a73e8">campaign</mat-icon>
                 </div>
                 <div class="expand-hint">
                   <mat-icon>{{ activePanel === 'campaigns' ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -86,7 +86,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     <div class="stat-label">Total Contacts</div>
                     <div class="stat-sub">Across all campaigns</div>
                   </div>
-                  <mat-icon class="stat-icon" style="color:#34d399">people</mat-icon>
+                  <mat-icon class="stat-icon" style="color:#34a853">people</mat-icon>
                 </div>
                 <div class="expand-hint">
                   <mat-icon>{{ activePanel === 'contacts' ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -120,7 +120,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     <div class="stat-label">Scheduled</div>
                     <div class="stat-sub">Pending delivery</div>
                   </div>
-                  <mat-icon class="stat-icon" style="color:#60a5fa">schedule</mat-icon>
+                  <mat-icon class="stat-icon" style="color:#1a73e8">schedule</mat-icon>
                 </div>
                 <div class="expand-hint">
                   <mat-icon>{{ activePanel === 'scheduled' ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -137,7 +137,7 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
                     <div class="stat-label">Failed</div>
                     <div class="stat-sub">Click to view &amp; retry</div>
                   </div>
-                  <mat-icon class="stat-icon" style="color:#f87171">error_outline</mat-icon>
+                  <mat-icon class="stat-icon" style="color:#ea4335">error_outline</mat-icon>
                 </div>
                 <div class="expand-hint">
                   <mat-icon>{{ activePanel === 'failed' ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -300,19 +300,19 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
             <div class="action-cards">
               <mat-card class="action-card" routerLink="/campaigns/new" style="cursor:pointer">
                 <mat-card-content>
-                  <mat-icon style="color:#38bdf8">add_circle</mat-icon>
+                  <mat-icon color="primary">add_circle</mat-icon>
                   <span>Create Campaign</span>
                 </mat-card-content>
               </mat-card>
               <mat-card class="action-card" routerLink="/contacts" style="cursor:pointer">
                 <mat-card-content>
-                  <mat-icon style="color:#34d399">person_add</mat-icon>
+                  <mat-icon color="accent">person_add</mat-icon>
                   <span>Manage Contacts</span>
                 </mat-card-content>
               </mat-card>
               <mat-card class="action-card" routerLink="/campaigns" style="cursor:pointer">
                 <mat-card-content>
-                  <mat-icon style="color:#a78bfa">list</mat-icon>
+                  <mat-icon style="color:#34a853">list</mat-icon>
                   <span>View Campaigns</span>
                 </mat-card-content>
               </mat-card>
@@ -326,10 +326,10 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
     .loading-center { display: flex; justify-content: center; padding: 80px; }
     .gmail-warning {
       display: flex; align-items: center; gap: 10px;
-      background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); border-radius: 8px;
-      padding: 12px 16px; margin-bottom: 20px; color: #fbbf24; font-size: 14px;
-      mat-icon { color: #fbbf24; flex-shrink: 0; }
-      &:hover { background: rgba(251,191,36,0.15); }
+      background: #fff8e1; border: 1px solid #ffca28; border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 20px; color: #5d4037; font-size: 14px;
+      mat-icon { color: #f9a825; flex-shrink: 0; }
+      &:hover { background: #fff3cd; }
     }
     .stats-grid {
       display: grid;
@@ -340,18 +340,18 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
     .stats-card {
       cursor: pointer;
       transition: box-shadow 0.15s, border-color 0.15s, transform 0.15s;
-      border: 1px solid rgba(255,255,255,0.07) !important;
-      &:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.4) !important; }
-      &.expanded { border-color: #0ea5e9 !important; }
+      border: 2px solid transparent !important;
+      &:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
+      &.expanded { border-color: #1a73e8 !important; }
     }
     .stat-row { display: flex; align-items: center; justify-content: space-between; }
-    .stat-value { font-size: 34px; font-weight: 700; color: rgba(255,255,255,0.95); }
-    .stat-label { font-size: 13px; color: rgba(255,255,255,0.5); font-weight: 500; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-sub { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 4px; }
-    .stat-icon { font-size: 38px; width: 38px; height: 38px; opacity: 0.7; }
+    .stat-value { font-size: 34px; font-weight: 700; color: #202124; }
+    .stat-label { font-size: 13px; color: #5f6368; font-weight: 500; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-sub { font-size: 12px; color: #9aa0a6; margin-top: 4px; }
+    .stat-icon { font-size: 38px; width: 38px; height: 38px; opacity: 0.8; }
     .expand-hint {
       display: flex; justify-content: center; margin-top: 8px;
-      mat-icon { font-size: 18px; width: 18px; height: 18px; color: rgba(255,255,255,0.25); }
+      mat-icon { font-size: 18px; width: 18px; height: 18px; color: #9aa0a6; }
     }
     .detail-panel {
       margin-bottom: 24px;
@@ -361,21 +361,18 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
     .panel-table { width: 100%; }
     .filter-row { display: flex; align-items: center; padding-bottom: 4px; }
     .filter-field { width: 320px; }
-    .link { color: #38bdf8; text-decoration: none; font-weight: 500; &:hover { text-decoration: underline; } }
-    .sub { font-size: 11px; color: rgba(255,255,255,0.35); }
-    .empty-msg { text-align: center; color: rgba(255,255,255,0.3); padding: 24px; font-size: 14px; }
-    .error-msg { font-size: 12px; color: #f87171; }
-    .quick-actions h2 {
-      font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.4);
-      margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.6px;
-    }
+    .link { color: #1a73e8; text-decoration: none; font-weight: 500; &:hover { text-decoration: underline; } }
+    .sub { font-size: 11px; color: #9aa0a6; }
+    .empty-msg { text-align: center; color: #9aa0a6; padding: 24px; font-size: 14px; }
+    .error-msg { font-size: 12px; color: #c62828; }
+    .quick-actions h2 { font-size: 13px; font-weight: 600; color: #5f6368; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
     .action-cards { display: flex; gap: 12px; flex-wrap: wrap; }
     .action-card {
       cursor: pointer; border-radius: 10px !important;
       transition: transform 0.15s, box-shadow 0.15s; min-width: 160px;
-      &:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.4) !important; }
+      &:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
       mat-card-content { display: flex; align-items: center; gap: 12px; padding: 16px !important; }
-      span { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.8); }
+      span { font-size: 14px; font-weight: 500; }
     }
   `]
 })
