@@ -122,11 +122,11 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                       Gemini reads these documents to identify contacts and generate personalized emails.
                     </div>
 
-                    <!-- Mode tabs — same pattern as Campaign 1.0 -->
+                    <!-- Mode tabs -->
                     <div class="mode-tabs">
                       <button type="button" class="mode-tab" [class.active]="docsMode === 'drive'"
                               (click)="docsMode = 'drive'">
-                        <mat-icon>add_to_drive</mat-icon> Google Drive Folder
+                        <mat-icon>add_to_drive</mat-icon> Google Docs Links
                       </button>
                       <button type="button" class="mode-tab" [class.active]="docsMode === 'upload'"
                               (click)="docsMode = 'upload'">
@@ -161,10 +161,17 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                         @if (pendingFiles.length > 0) {
                           <span>{{ pendingFiles.length }} file(s) selected — click to add more</span>
                         } @else {
-                          <span>Click to attach files (HTML, PDF, DOCX, TXT)</span>
+                          <span>Click to select one or more files (PDF, DOCX, TXT, HTML)</span>
                         }
                         <input #fileInput type="file" multiple accept=".html,.htm,.pdf,.docx,.txt"
                                hidden (change)="onFilesSelected($event)">
+                      </div>
+                      <div class="drive-info">
+                        <mat-icon class="drive-info-icon">info</mat-icon>
+                        <div>
+                          You can select <strong>multiple files</strong> at once (hold Ctrl/Cmd while selecting).
+                          Supported: <strong>PDF, DOCX, TXT, HTML</strong>.
+                        </div>
                       </div>
                     }
 
@@ -201,7 +208,7 @@ import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, Cam
                         [disabled]="step1Form.invalid || savingStep1 || !hasDocuments()"
                         (click)="saveStep1(stepper)">
                   @if (savingStep1) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
-                  {{ savingStep1 ? (docsMode === 'drive' ? 'Importing from Drive…' : 'Uploading…') : 'Next: Generate Customer List' }}
+                  {{ savingStep1 ? (docsMode === 'drive' ? 'Importing docs…' : 'Uploading…') : 'Next: Generate Customer List' }}
                   @if (!savingStep1) { <mat-icon>arrow_forward</mat-icon> }
                 </button>
               </div>
@@ -803,7 +810,7 @@ export class CampaignPlanWizardComponent implements OnInit {
             },
             error: err => {
               this.savingStep1 = false;
-              const msg = err?.error?.message ?? 'Failed to import from Drive. Make sure your Gmail account is connected and the folder is shared with it.';
+              const msg = err?.error?.message ?? 'Failed to import documents. Make sure the links are Google Docs or Slides and your Gmail account is connected in Settings.';
               this.snackBar.open(msg, 'Close', { duration: 10000 });
             }
           });
