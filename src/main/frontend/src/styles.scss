@@ -1,40 +1,18 @@
-/* Google Material Design Global Styles */
 @use '@angular/material' as mat;
 
+/* ─── Root ──────────────────────────────────────────────── */
 html, body {
   height: 100%;
   margin: 0;
   font-family: 'Google Sans', 'Roboto', sans-serif;
-  background-color: #f8f9fa;
+  background-color: #0d1117;
+  color: rgba(255,255,255,0.87);
 }
 
-/* Status chip colors */
-.status-chip {
-  &.scheduled  { background: #e3f2fd; color: #1565c0; }
-  &.sent       { background: #e8f5e9; color: #2e7d32; }
-  &.failed     { background: #ffebee; color: #c62828; }
-  &.skipped    { background: #f5f5f5; color: #757575; }
-  &.draft      { background: #fff3e0; color: #e65100; }
-  &.active     { background: #e8f5e9; color: #2e7d32; }
-  &.paused     { background: #fff9c4; color: #f57f17; }
-  &.completed  { background: #ede7f6; color: #4527a0; }
-}
-
-/* Stats cards */
-.stats-card {
-  border-radius: 12px !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08) !important;
-  transition: box-shadow 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
-  }
-}
-
-/* Page layout */
+/* ─── Page Layout ────────────────────────────────────────── */
 .page-container {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -45,40 +23,162 @@ html, body {
   margin-bottom: 24px;
 
   h1 {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 500;
-    color: #202124;
+    color: rgba(255,255,255,0.92);
     margin: 0;
+    letter-spacing: 0.2px;
   }
 }
 
-/* Table styles */
+/* ─── Cards ──────────────────────────────────────────────── */
+.mat-mdc-card {
+  background: #1e2536 !important;
+  color: rgba(255,255,255,0.87) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4) !important;
+}
+
+.mat-mdc-card-title {
+  color: rgba(255,255,255,0.92) !important;
+}
+
+.mat-mdc-card-subtitle {
+  color: rgba(255,255,255,0.5) !important;
+}
+
+/* ─── Tables ─────────────────────────────────────────────── */
 .mat-mdc-table {
+  background: #1e2536 !important;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255,255,255,0.07);
 }
 
-/* Form fields */
-.mat-mdc-form-field {
-  width: 100%;
+.mat-mdc-header-row {
+  background: #252d3d !important;
 }
 
-/* Snackbar colors */
-.snack-success .mat-mdc-snack-bar-container { --mdc-snackbar-container-color: #43a047; }
-.snack-error   .mat-mdc-snack-bar-container { --mdc-snackbar-container-color: #e53935; }
-
-/* Sidenav layout */
-.sidenav-container {
-  height: 100%;
+.mat-mdc-header-cell {
+  color: rgba(255,255,255,0.55) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase;
+  border-bottom-color: rgba(255,255,255,0.08) !important;
 }
 
-.sidenav {
-  width: 240px;
+.mat-mdc-row {
+  background: #1e2536 !important;
+  border-bottom-color: rgba(255,255,255,0.05) !important;
+  transition: background 0.12s;
+  &:hover { background: #252d3d !important; }
 }
 
-.content-area {
-  padding: 0;
-  flex: 1;
-  overflow-y: auto;
+.mat-mdc-cell {
+  color: rgba(255,255,255,0.8) !important;
+  border-bottom-color: rgba(255,255,255,0.05) !important;
 }
+
+/* Sort icons */
+.mat-sort-header-arrow { color: rgba(255,255,255,0.35) !important; }
+
+/* ─── Form Fields ─────────────────────────────────────────── */
+.mat-mdc-form-field { width: 100%; }
+
+.mat-mdc-outlined-button:not([disabled]) { color: rgba(255,255,255,0.87) !important; }
+
+/* Outline form field dark theme */
+.mat-mdc-text-field-wrapper {
+  background: rgba(255,255,255,0.04) !important;
+}
+.mdc-notched-outline__leading,
+.mdc-notched-outline__notch,
+.mdc-notched-outline__trailing {
+  border-color: rgba(255,255,255,0.2) !important;
+}
+.mat-mdc-form-field:hover .mdc-notched-outline__leading,
+.mat-mdc-form-field:hover .mdc-notched-outline__notch,
+.mat-mdc-form-field:hover .mdc-notched-outline__trailing {
+  border-color: rgba(255,255,255,0.45) !important;
+}
+.mat-mdc-form-field.mat-focused .mdc-notched-outline__leading,
+.mat-mdc-form-field.mat-focused .mdc-notched-outline__notch,
+.mat-mdc-form-field.mat-focused .mdc-notched-outline__trailing {
+  border-color: #0ea5e9 !important;
+}
+.mat-mdc-floating-label { color: rgba(255,255,255,0.5) !important; }
+.mat-mdc-floating-label.mdc-floating-label--float-above { color: #38bdf8 !important; }
+.mat-mdc-input-element { color: rgba(255,255,255,0.87) !important; caret-color: #38bdf8; }
+.mat-mdc-select-value { color: rgba(255,255,255,0.87) !important; }
+.mat-mdc-select-arrow { color: rgba(255,255,255,0.5) !important; }
+
+/* Select panel */
+.mat-mdc-select-panel {
+  background: #252d3d !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+}
+.mat-mdc-option {
+  color: rgba(255,255,255,0.8) !important;
+  &:hover, &.mat-mdc-option-active { background: rgba(14,165,233,0.12) !important; }
+  &.mdc-list-item--selected { color: #38bdf8 !important; }
+}
+
+/* ─── Buttons ────────────────────────────────────────────── */
+.mat-mdc-raised-button[color="primary"],
+.mat-mdc-unelevated-button[color="primary"] {
+  background: #0ea5e9 !important;
+  color: white !important;
+}
+.mat-mdc-button[color="primary"] { color: #38bdf8 !important; }
+.mat-mdc-icon-button { color: rgba(255,255,255,0.6) !important; }
+.mat-mdc-icon-button:hover { color: rgba(255,255,255,0.9) !important; }
+
+/* ─── Chips ──────────────────────────────────────────────── */
+.chip, .status-chip {
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+
+  &.draft, &.DRAFT         { background: rgba(251,146,60,0.15); color: #fb923c; }
+  &.active, &.ACTIVE       { background: rgba(52,211,153,0.15); color: #34d399; }
+  &.paused, &.PAUSED       { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  &.completed, &.COMPLETED { background: rgba(167,139,250,0.15); color: #a78bfa; }
+  &.scheduled, &.SCHEDULED { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  &.sent, &.SENT           { background: rgba(52,211,153,0.15); color: #34d399; }
+  &.failed, &.FAILED       { background: rgba(248,113,113,0.15); color: #f87171; }
+  &.skipped, &.SKIPPED     { background: rgba(156,163,175,0.12); color: #9ca3af; }
+}
+
+/* ─── Snackbars ──────────────────────────────────────────── */
+.snack-success .mat-mdc-snack-bar-container { --mdc-snackbar-container-color: #0ea5e9; }
+.snack-error   .mat-mdc-snack-bar-container { --mdc-snackbar-container-color: #ef4444; }
+
+/* ─── Dialogs ────────────────────────────────────────────── */
+.mat-mdc-dialog-container {
+  --mdc-dialog-container-color: #1e2536;
+  .mat-mdc-dialog-title { color: rgba(255,255,255,0.92) !important; }
+  .mat-mdc-dialog-content { color: rgba(255,255,255,0.7) !important; }
+}
+
+/* ─── Sidenav ────────────────────────────────────────────── */
+.sidenav-container { height: 100%; }
+.content-area { background: #0d1117; }
+
+/* ─── Misc ───────────────────────────────────────────────── */
+.mat-mdc-progress-spinner circle { stroke: #0ea5e9 !important; }
+.mat-mdc-tab-header { border-bottom: 1px solid rgba(255,255,255,0.08) !important; }
+.mat-mdc-tab .mdc-tab__text-label { color: rgba(255,255,255,0.55) !important; }
+.mat-mdc-tab.mdc-tab--active .mdc-tab__text-label { color: #38bdf8 !important; }
+.mdc-tab-indicator__content--underline { border-color: #0ea5e9 !important; }
+
+.mat-divider { border-top-color: rgba(255,255,255,0.08) !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
