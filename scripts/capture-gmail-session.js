@@ -19,10 +19,8 @@ const path = require('path');
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-function isGoogleAuthPage(url) {
-  return url.includes('mail.google.com')
-      || url.includes('accounts.google.com')
-      || url.includes('broadcom.com');   // Broadcom SSO (Google Workspace login)
+function isChatOrMeet(url) {
+  return url.includes('chat.google.com') || url.includes('meet.google.com');
 }
 
 function setupKeyCapture(onEnter) {
@@ -54,26 +52,26 @@ async function main() {
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
 
-  // Attempt to close a page that isn't Gmail/Google auth.
+  // Close a page only if it's Google Chat or Google Meet.
   // Uses a poll loop because the URL is about:blank at the moment the event fires.
-  async function closeIfNotGmail(p) {
+  async function closeIfChat(p) {
     let url = '';
     for (let i = 0; i < 25; i++) {
       try { url = p.url(); } catch (_) { return; } // page already closed
       if (url && url !== 'about:blank' && url !== 'about:newtab') break;
       await sleep(300);
     }
-    if (!url || url.startsWith('about:') || isGoogleAuthPage(url)) return;
-    console.log('\n  [auto-close] ' + url.substring(0, 100));
+    if (!url || !isChatOrMeet(url)) return;
+    console.log('\n  [auto-close chat/meet] ' + url.substring(0, 100));
     try { await p.close(); } catch (e) { console.log('  [close error] ' + e.message); }
   }
 
   // Catch new tabs opened by any page in the context
-  context.on('page', closeIfNotGmail);
+  context.on('page', closeIfChat);
 
   const page = await context.newPage();
   // Also catch window.open() popups originating from the Gmail page
-  page.on('popup', closeIfNotGmail);
+  page.on('popup', closeIfChat);
   await page.goto('https://mail.google.com');
 
   console.log('──────────────────────────────────────────────────────');
@@ -105,13 +103,12 @@ async function main() {
       break;
     }
 
-    // ── Sweep: close every non-Gmail page that slipped past the event handler ──
+    // ── Sweep: close any Chat/Meet pages that slipped past the event handler ──
     for (const p of context.pages()) {
       let u = '';
       try { u = p.url(); } catch (_) { continue; }
-      if (!u || u === 'about:blank' || u === 'about:newtab') continue;
-      if (isGoogleAuthPage(u)) continue;
-      console.log('\n  [sweep-close] ' + u.substring(0, 100));
+      if (!u || !isChatOrMeet(u)) continue;
+      console.log('\n  [sweep-close chat] ' + u.substring(0, 100));
       try { await p.close(); } catch (_) {}
     }
 
