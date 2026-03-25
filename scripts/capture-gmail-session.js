@@ -36,13 +36,11 @@ async function main() {
   console.log(' after your inbox or any Gmail page loads.');
   console.log('──────────────────────────────────────────────────────\n');
 
-  const LOGIN_PAGES = ['accounts.google.com', 'broadcom.com', 'okta.com',
-                       'about:blank', 'about:newtab'];
-
+  // Must be fully in the Gmail inbox — /mail/u/ confirms SSO is complete.
   function isLoggedIn(url) {
     if (!url) return false;
-    if (!url.includes('mail.google.com')) return false;
-    // Still on login/redirect — not yet in inbox
+    // Require /mail/u/ — rules out the SSO-redirect hop through mail.google.com
+    if (!url.includes('mail.google.com/mail/u/')) return false;
     if (url.includes('/SignOutOptions') || url.includes('/Logout')) return false;
     return true;
   }
@@ -50,7 +48,7 @@ async function main() {
   const TIMEOUT_MS = 300_000;
   const deadline   = Date.now() + TIMEOUT_MS;
   let loggedInAt   = null;
-  const SETTLE_MS  = 5_000; // wait 5s after detecting login before capturing
+  const SETTLE_MS  = 10_000; // wait 10s after inbox detected (SSO may still be settling)
 
   while (Date.now() < deadline) {
     await sleep(1_000);
@@ -68,8 +66,8 @@ async function main() {
       if (!loggedInAt) {
         loggedInAt = Date.now();
         process.stdout.write('\n');
-        console.log('Gmail detected: ' + gmailUrl.substring(0, 80));
-        console.log('Capturing session in 5 seconds...');
+        console.log('Gmail inbox detected: ' + gmailUrl.substring(0, 80));
+        console.log('Waiting 10 seconds for session to fully settle...');
       }
 
       const remaining = Math.ceil((SETTLE_MS - (Date.now() - loggedInAt)) / 1000);
