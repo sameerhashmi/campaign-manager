@@ -149,4 +149,12 @@ export class CampaignPlanService {
       { fileUrls }
     );
   }
+
+  importContactsFromExcel(planId: number, file: File): Observable<ProspectContact[]> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.http.post<ProspectContact[]>(
+      `${this.base}/${planId}/contacts/import-excel`, formData
+    );
+  }
 }

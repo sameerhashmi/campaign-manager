@@ -20,7 +20,8 @@
       "Bash(cf target:*)",
       "Bash(cf login:*)",
       "Bash(cf oauth-token:*)",
-      "Bash(python3 -:*)"
+      "Bash(python3 -:*)",
+      "Bash(ls target/*.jar)"
     ]
   }
 }

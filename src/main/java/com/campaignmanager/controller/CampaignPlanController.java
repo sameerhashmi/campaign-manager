@@ -48,6 +48,14 @@ public class CampaignPlanController {
         return ResponseEntity.ok(planService.generateContacts(id, auth));
     }
 
+    @PostMapping(value = "/{id}/contacts/import-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<List<ProspectContactDto>> importContactsFromExcel(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file,
+            Authentication auth) {
+        return ResponseEntity.ok(planService.importContactsFromExcel(id, file, auth));
+    }
+
     @GetMapping("/{id}/contacts")
     public ResponseEntity<List<ProspectContactDto>> getContacts(@PathVariable Long id, Authentication auth) {
         return ResponseEntity.ok(planService.getContacts(id, auth));

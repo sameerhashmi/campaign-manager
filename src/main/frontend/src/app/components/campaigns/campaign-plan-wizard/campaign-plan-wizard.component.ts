@@ -102,6 +102,7 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                     <div class="step1-col">
                       <div class="col-section-title">Research Criteria</div>
                       <form [formGroup]="step1Form" class="step-form">
+                        @if (docsMode !== 'excel') {
                         <mat-form-field appearance="outline" class="full-width">
                           <mat-label>Contact Research Gem *</mat-label>
                           <mat-select formControlName="contactGemId">
@@ -114,6 +115,12 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                           </mat-select>
                           <mat-hint>Extracts prospect contacts from your briefing documents.</mat-hint>
                         </mat-form-field>
+                        } @else {
+                          <div class="excel-mode-note">
+                            <mat-icon style="color:#38a169;font-size:18px;width:18px;height:18px">check_circle</mat-icon>
+                            <span>Contact Research Gem not needed — contacts will be imported from Excel.</span>
+                          </div>
+                        }
 
                         <mat-form-field appearance="outline" class="full-width">
                           <mat-label>Email Generation Gem *</mat-label>
@@ -144,12 +151,16 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                     <!-- Mode tabs -->
                     <div class="mode-tabs">
                       <button type="button" class="mode-tab" [class.active]="docsMode === 'drive'"
-                              (click)="docsMode = 'drive'">
+                              (click)="setDocsMode('drive')">
                         <mat-icon>add_to_drive</mat-icon> Google Docs Links
                       </button>
                       <button type="button" class="mode-tab" [class.active]="docsMode === 'upload'"
-                              (click)="docsMode = 'upload'">
+                              (click)="setDocsMode('upload')">
                         <mat-icon>upload_file</mat-icon> Upload Files
+                      </button>
+                      <button type="button" class="mode-tab" [class.active]="docsMode === 'excel'"
+                              (click)="setDocsMode('excel')">
+                        <mat-icon>table_chart</mat-icon> Import from Excel
                       </button>
                     </div>
 
@@ -194,6 +205,30 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                       </div>
                     }
 
+                    <!-- Import from Excel mode -->
+                    @if (docsMode === 'excel') {
+                      <div class="file-drop-area" (click)="excelFileInput.click()"
+                           [class.has-file]="!!excelFile">
+                        <mat-icon>table_chart</mat-icon>
+                        @if (excelFile) {
+                          <span>{{ excelFile.name }} — click to change</span>
+                        } @else {
+                          <span>Click to select an Excel file (.xlsx)</span>
+                        }
+                        <input #excelFileInput type="file" accept=".xlsx,.xls"
+                               hidden (change)="onExcelFileSelected($event)">
+                      </div>
+                      <div class="drive-info">
+                        <mat-icon class="drive-info-icon">info</mat-icon>
+                        <div>
+                          Row 1 must be a header row. Required column: <strong>Name</strong>.
+                          Optional: <strong>Title, Email, Team, Seniority, Relevance</strong>.
+                          Contacts will be pre-selected — you can deselect on the next step.
+                          <br>Contact Research Gem is <strong>not required</strong> in this mode.
+                        </div>
+                      </div>
+                    }
+
                     <!-- Document list (shown in both modes) -->
                     @if (uploadedDocs.length > 0 || pendingFiles.length > 0) {
                       <div class="doc-list">
@@ -226,10 +261,10 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
               <div class="step-actions">
                 <button mat-button (click)="cancel()">Cancel</button>
                 <button mat-raised-button color="primary"
-                        [disabled]="step1Form.invalid || savingStep1 || !hasDocuments()"
+                        [disabled]="isStep1Invalid() || savingStep1"
                         (click)="saveStep1(stepper)">
                   @if (savingStep1) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
-                  {{ savingStep1 ? (docsMode === 'drive' ? 'Importing docs…' : 'Uploading…') : 'Next: Generate Customer List' }}
+                  {{ savingStep1 ? (docsMode === 'drive' ? 'Importing docs…' : (docsMode === 'excel' ? 'Importing contacts…' : 'Uploading…')) : (docsMode === 'excel' ? 'Next: Import Customer List' : 'Next: Generate Customer List') }}
                   @if (!savingStep1) { <mat-icon>arrow_forward</mat-icon> }
                 </button>
               </div>
@@ -694,6 +729,11 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
       &.has-file { border-color: #188038; color: #188038; background: #f0faf4; }
       mat-icon { flex-shrink: 0; }
     }
+    .excel-mode-note {
+      display: flex; align-items: center; gap: 8px;
+      background: #f0faf4; border: 1px solid #c6f6d5; border-radius: 8px;
+      padding: 10px 14px; font-size: 13px; color: #276749; margin-bottom: 4px;
+    }
     .drive-info {
       display: flex; gap: 10px; align-items: flex-start;
       background: #e8f0fe; padding: 12px 14px; border-radius: 8px;
@@ -785,7 +825,8 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   pendingFiles: File[] = [];
   driveImportUrls = '';
   importingFromDrive = false;
-  docsMode: 'drive' | 'upload' = 'drive';
+  docsMode: 'drive' | 'upload' | 'excel' = 'drive';
+  excelFile: File | null = null;
 
   contacts: ProspectContact[] = [];
   generatingContacts = false;
@@ -875,9 +916,36 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
     this.planService.getDocuments(id).subscribe(docs => this.uploadedDocs = docs);
   }
 
+  setDocsMode(mode: 'drive' | 'upload' | 'excel'): void {
+    this.docsMode = mode;
+    const ctrl = this.step1Form.get('contactGemId')!;
+    if (mode === 'excel') {
+      ctrl.clearValidators();
+    } else {
+      ctrl.setValidators(Validators.required);
+    }
+    ctrl.updateValueAndValidity();
+  }
+
   hasDocuments(): boolean {
     if (this.docsMode === 'drive') return !!this.driveImportUrls.trim() || this.uploadedDocs.length > 0;
+    if (this.docsMode === 'excel') return !!this.excelFile;
     return this.pendingFiles.length > 0 || this.uploadedDocs.length > 0;
+  }
+
+  isStep1Invalid(): boolean {
+    if (this.docsMode === 'excel') {
+      // In Excel mode only name, customer, and emailGemId are required
+      const f = this.step1Form;
+      return !f.get('name')?.valid || !f.get('customer')?.valid || !this.excelFile;
+    }
+    return this.step1Form.invalid || !this.hasDocuments();
+  }
+
+  onExcelFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files?.length) this.excelFile = input.files[0];
+    input.value = '';
   }
 
   parseDriveUrls(): string[] {
@@ -888,7 +956,7 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   }
 
   saveStep1(stepper: any): void {
-    if (this.step1Form.invalid) return;
+    if (this.isStep1Invalid()) return;
     this.savingStep1 = true;
     const dto = this.step1Form.value as CampaignPlan;
 
@@ -900,7 +968,23 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
       next: plan => {
         this.planId = plan.id!;
 
-        if (this.docsMode === 'drive' && this.driveImportUrls.trim()) {
+        if (this.docsMode === 'excel' && this.excelFile) {
+          // Import contacts directly from Excel — skip Gemini contact research
+          this.planService.importContactsFromExcel(this.planId, this.excelFile).subscribe({
+            next: imported => {
+              this.contacts = imported;
+              this.excelFile = null;
+              this.savingStep1 = false;
+              stepper.selectedIndex = 1;
+              // Mark step 2 as ready — no Gemini call needed
+              this.step2Completed = false;
+            },
+            error: err => {
+              this.savingStep1 = false;
+              this.snackBar.open(err?.error?.message ?? 'Failed to import Excel file', 'Close', { duration: 8000 });
+            }
+          });
+        } else if (this.docsMode === 'drive' && this.driveImportUrls.trim()) {
           // Import files from individual Drive/Docs URLs, then advance
           const urls = this.parseDriveUrls();
           this.planService.importDocumentsFromDrive(this.planId, urls).subscribe({

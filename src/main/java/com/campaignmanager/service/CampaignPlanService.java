@@ -13,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -568,6 +571,74 @@ public class CampaignPlanService {
         }
 
         return imported.stream().map(this::toDocumentDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<ProspectContactDto> importContactsFromExcel(Long planId, MultipartFile file, Authentication auth) {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        // Delete any previously AI-generated contacts for this plan before import
+        prospectContactRepository.deleteAllByCampaignPlan(plan);
+
+        List<ProspectContact> imported = new ArrayList<>();
+        try (Workbook wb = new XSSFWorkbook(file.getInputStream())) {
+            Sheet sheet = wb.getSheetAt(0);
+            Row header = sheet.getRow(0);
+            if (header == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Excel file is empty");
+
+            // Build column index map (case-insensitive header matching)
+            Map<String, Integer> colIdx = new HashMap<>();
+            for (Cell c : header) {
+                if (c != null) {
+                    String h = c.toString().trim().toLowerCase();
+                    colIdx.put(h, c.getColumnIndex());
+                }
+            }
+
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                String name = cell(row, colIdx, "name", "full name", "contact name");
+                if (name == null || name.isBlank()) continue;
+
+                ProspectContact pc = new ProspectContact();
+                pc.setCampaignPlan(plan);
+                pc.setName(name.trim());
+                pc.setTitle(cell(row, colIdx, "title", "job title", "role", "position"));
+                pc.setEmail(cell(row, colIdx, "email", "email address", "work email"));
+                pc.setRoleType(cell(row, colIdx, "role type", "roletype", "type"));
+                pc.setTeamDomain(cell(row, colIdx, "team", "team domain", "department", "company", "organization"));
+                pc.setSenioritySignal(cell(row, colIdx, "seniority", "seniority signal", "level"));
+                pc.setTanzuRelevance(cell(row, colIdx, "relevance", "tanzu relevance", "priority"));
+                pc.setSource("excel-import");
+                pc.setSelected(true);
+                imported.add(prospectContactRepository.save(pc));
+            }
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to read Excel file: " + e.getMessage());
+        }
+
+        if (imported.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No contacts found in the Excel file. Make sure row 1 is a header row with at least a 'Name' column.");
+        }
+        log.info("Imported {} contacts from Excel for plan {}", imported.size(), planId);
+        return imported.stream().map(this::toProspectDto).collect(Collectors.toList());
+    }
+
+    /** Returns the cell value for the first matching column header, or null if none found. */
+    private String cell(Row row, Map<String, Integer> colIdx, String... headers) {
+        for (String h : headers) {
+            Integer idx = colIdx.get(h.toLowerCase());
+            if (idx != null) {
+                Cell c = row.getCell(idx);
+                if (c != null) {
+                    String v = c.toString().trim();
+                    return v.isEmpty() ? null : v;
+                }
+            }
+        }
+        return null;
     }
 
     @Transactional
