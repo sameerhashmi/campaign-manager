@@ -1,0 +1,16 @@
+1. Company Research:
+<Company Name> give me a lay of the land on the technology use. Their goals are on application transformation, cloud migration, and building AI apps. Lay out what language they use for building apps like Java, .net, what cloud they use, AWS, GCP, or on-premises. Also 
+include their data strategy for transactional and data lake/warehouse.  How many developers and operators do they have, and what's the initiative their CTO and CIO are working on for 2026 
+
+Also, list any concerns or challenges they face as a tech company. Give me the names of the CIO, CTO, VP of App Dev, CDO or VP of Data and Analytics, and VP of Cloud and Infrastructure who are leading the goals and initiatives
+
+
+
+2. Why Tanzu:
+What VMware by Broadcom Tanzu Solutions (VMware Tanzu Data Intelligence, Tanzu Spring Essentials, VMware Tanzu Platform, Tanzu Application Catalog) or if just a specific sub component listed here (https://www.vmware.com/products/app-platform)​ fits best for this company  that solves the concerns their leadership is trying to solve for 2026 - 2027.
+
+3. Who target
+Give me names and details of likely direct reports of the people listed earlier under Key Leadership or in their software engineering or data practices. Provide as many as you can and do not limit yourself. For each person, list their name, title, who they likely report to, and which tanzu solution is the best fit to target with them. List in a table if possible.
+
+4. Create list of targets to paste into sheet
+create a table with name and title from looking through the content in this folder https://drive.google.com/drive/u/1/folders/19gnx0bpMJsnkHaS6ZoZDnke51Gpexl5n in order to identify all the names of who we should target for our email campaign for our tanzu solutions.  I want to be able to copy and paste it into our tracking spreadsheet.  The table should only have 2 columns name and title.

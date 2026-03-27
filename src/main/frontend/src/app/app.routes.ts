@@ -64,6 +64,12 @@ export const routes: Routes = [
       import('./components/contacts/contact-list/contact-list.component').then(m => m.ContactListComponent)
   },
   {
+    path: 'setup',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./components/setup/setup.component').then(m => m.SetupComponent)
+  },
+  {
     path: 'settings',
     canActivate: [authGuard],
     loadComponent: () =>

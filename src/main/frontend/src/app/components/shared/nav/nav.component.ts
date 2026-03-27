@@ -75,6 +75,11 @@ import { ThemeService } from '../../../services/theme.service';
 
           <div class="nav-divider"></div>
 
+          <a class="nav-item" routerLink="/setup" routerLinkActive="nav-active"
+             [matTooltip]="collapsed ? 'Setup Guide' : ''" matTooltipPosition="right">
+            <mat-icon>menu_book</mat-icon>
+            @if (!collapsed) { <span>Setup Guide</span> }
+          </a>
           <a class="nav-item" routerLink="/settings" routerLinkActive="nav-active"
              [matTooltip]="collapsed ? 'Settings' : ''" matTooltipPosition="right">
             <mat-icon>settings</mat-icon>

@@ -433,6 +433,44 @@ html, body {
   .empty-msg { color: rgba(255,255,255,0.3) !important; }
   .error-msg { color: #f87171 !important; }
 
+  /* Setup Guide page */
+  .page-header h1 { color: rgba(255,255,255,0.92) !important; }
+  .header-sub { color: rgba(255,255,255,0.45) !important; }
+  .section-title { color: rgba(255,255,255,0.87) !important; }
+  .section-sub { color: rgba(255,255,255,0.45) !important; }
+  .step-card { border-color: rgba(255,255,255,0.07) !important; }
+  .step-title { color: rgba(255,255,255,0.87) !important; }
+  .step-desc { color: rgba(255,255,255,0.5) !important; }
+  .step-num { color: rgba(255,255,255,0.3) !important; }
+  .substep-num { background: rgba(255,255,255,0.08) !important; color: rgba(255,255,255,0.4) !important; }
+  .substep-body { color: rgba(255,255,255,0.8) !important; }
+  .substep-body p { color: rgba(255,255,255,0.5) !important; }
+  .substep-body strong { color: rgba(255,255,255,0.9) !important; }
+  .code-block {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    pre { color: #38bdf8 !important; }
+  }
+  .prompt-label { color: rgba(255,255,255,0.4) !important; }
+  .prompt-box {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    pre { color: rgba(255,255,255,0.8) !important; }
+  }
+  .tip-box {
+    background: rgba(14,165,233,0.08) !important;
+    color: rgba(255,255,255,0.6) !important;
+    strong { color: rgba(255,255,255,0.87) !important; }
+    code { background: rgba(255,255,255,0.08) !important; color: #38bdf8 !important; }
+  }
+  .tip-icon { color: #38bdf8 !important; }
+  .option-card {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    color: rgba(255,255,255,0.5) !important;
+    strong { color: rgba(255,255,255,0.87) !important; }
+  }
+
   /* Scrollbar dark override */
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
   ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }

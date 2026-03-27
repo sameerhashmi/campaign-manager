@@ -24,6 +24,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -50,6 +56,21 @@ public class SettingsController {
     private final UserGeminiSettingsRepository geminiSettingsRepository;
     private final UserRepository userRepository;
     private final GeminiApiService geminiApiService;
+
+    // ─── Setup: capture script download ───────────────────────────────────────
+
+    @GetMapping("/gmail/capture-script")
+    public ResponseEntity<Resource> downloadCaptureScript() {
+        // Served from classpath (bundled into JAR via src/main/resources/)
+        ClassPathResource res = new ClassPathResource("capture-gmail-session.js");
+        if (!res.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"capture-gmail-session.js\"")
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(res);
+    }
 
     // ─── Status ───────────────────────────────────────────────────────────────
 

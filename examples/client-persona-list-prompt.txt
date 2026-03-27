@@ -1,0 +1,1 @@
+create a table with name and title from looking through the content in this folder {gdrive location} in order to identify all the names of who we should target for our email campaign for our tanzu solutions.  I want to be able to copy and paste it into our tracking spreadsheet.  The table should only have 2 columns name and title.
