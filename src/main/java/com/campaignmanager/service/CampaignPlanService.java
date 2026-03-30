@@ -443,12 +443,10 @@ public class CampaignPlanService {
         plan.setGmailEmail(dto.getGmailEmail());
         plan.setEmailFormat(dto.getEmailFormat());
         if (dto.getContactGemId() != null) {
-            gemRepository.findByIdAndOwner(dto.getContactGemId(), owner)
-                    .ifPresent(plan::setContactGem);
+            resolveGem(dto.getContactGemId(), owner).ifPresent(plan::setContactGem);
         }
         if (dto.getEmailGemId() != null) {
-            gemRepository.findByIdAndOwner(dto.getEmailGemId(), owner)
-                    .ifPresent(plan::setEmailGem);
+            resolveGem(dto.getEmailGemId(), owner).ifPresent(plan::setEmailGem);
         }
     }
 
@@ -497,6 +495,13 @@ public class CampaignPlanService {
 
     private String requireApiKey(Authentication auth) {
         return requireGeminiSettings(auth).getApiKey();
+    }
+
+    /** Find gem by owner; if not found, fall back to admin's gem with that id. */
+    private java.util.Optional<com.campaignmanager.model.Gem> resolveGem(Long gemId, User owner) {
+        return gemRepository.findByIdAndOwner(gemId, owner)
+                .or(() -> userRepository.findByUsername("admin")
+                        .flatMap(admin -> gemRepository.findByIdAndOwner(gemId, admin)));
     }
 
     /**
