@@ -41,9 +41,8 @@ public class SecurityConfig {
                 .requestMatchers("/h2-console/**").permitAll()
                 // Protect only API endpoints — Angular app handles its own route guards
                 .requestMatchers("/api/client-briefings/*/document").permitAll()
-                // Campaign 2.0 — admin only
+                // Gems + Gemini settings — admin only
                 .requestMatchers("/api/gems/**").hasRole("ADMIN")
-                .requestMatchers("/api/campaign-plans/**").hasRole("ADMIN")
                 .requestMatchers("/api/settings/gemini/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
