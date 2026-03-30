@@ -466,10 +466,15 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                                     (blur)="saveEmail(activeEmail)"
                                     rows="18" class="email-body-textarea"></textarea>
                         </mat-form-field>
-                        <div class="schedule-info">
-                          <mat-icon>schedule</mat-icon>
-                          Scheduled: {{ formatScheduledAt(activeEmail.scheduledAt) }}
-                        </div>
+                        <mat-form-field appearance="outline" class="full-width">
+                          <mat-label>Scheduled Date &amp; Time</mat-label>
+                          <input matInput type="datetime-local"
+                                 [ngModel]="toDatetimeLocal(activeEmail.scheduledAt)"
+                                 (ngModelChange)="onScheduleChange(activeEmail, $event)"
+                                 (blur)="saveEmail(activeEmail)">
+                          <mat-icon matSuffix>schedule</mat-icon>
+                          <mat-hint>Change to reschedule — saves automatically</mat-hint>
+                        </mat-form-field>
                       </div>
                     }
                   </div>
@@ -602,8 +607,8 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
       font-size: 12px; background: #e8f0fe; color: #1a73e8;
       padding: 2px 8px; border-radius: 12px; font-weight: 600; vertical-align: middle;
     }
-    .wizard-stepper { max-width: 1100px; }
-    .step-content { padding: 24px 0; }
+    .wizard-stepper { max-width: 1400px; }
+    .step-content { padding: 16px 0; }
     .step-desc { color: #5f6368; font-size: 14px; margin: 0 0 20px; }
     .step-form { display: flex; flex-direction: column; gap: 8px; max-width: 560px; }
     .full-width { width: 100%; }
@@ -834,7 +839,7 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   editingContactId: number | null = null;
   step2Completed = false;
 
-  contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance', 'source'];
+  contactColumns = ['select', 'name', 'title', 'email', 'roleType', 'teamDomain', 'senioritySignal', 'tanzuRelevance'];
 
   generatingEmails = false;
   emailGenError: string | null = null;
@@ -1260,6 +1265,16 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
         hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'
       }) + ' ET';
     } catch { return scheduledAt; }
+  }
+
+  /** Strips seconds/timezone to produce "yyyy-MM-ddTHH:mm" for datetime-local input */
+  toDatetimeLocal(iso?: string): string {
+    if (!iso) return '';
+    return iso.substring(0, 16);
+  }
+
+  onScheduleChange(email: GeneratedEmail, value: string): void {
+    if (value) email.scheduledAt = value + ':00';
   }
 
   goToStep4(stepper: any): void {

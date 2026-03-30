@@ -363,7 +363,7 @@ export class CampaignV2DetailComponent implements OnInit {
       next: plan => {
         this.plan = plan;
         this.loading = false;
-        this.planService.getContacts(this.planId).subscribe(c => this.contacts = c);
+        this.planService.getContacts(this.planId).subscribe(c => this.contacts = c.filter(x => x.selected));
         if (plan.resultCampaignId) {
           this.campaignService.getById(plan.resultCampaignId).subscribe(c => {
             this.campaign = c;
