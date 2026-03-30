@@ -1,6 +1,7 @@
 package com.campaignmanager.config;
 
 import com.campaignmanager.security.JwtFilter;
+import org.springframework.http.HttpMethod;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,8 +42,10 @@ public class SecurityConfig {
                 .requestMatchers("/h2-console/**").permitAll()
                 // Protect only API endpoints — Angular app handles its own route guards
                 .requestMatchers("/api/client-briefings/*/document").permitAll()
-                // Gems + Gemini settings — admin only
+                // Gems — read for all authenticated, write for admin only
+                .requestMatchers(HttpMethod.GET, "/api/gems/**").authenticated()
                 .requestMatchers("/api/gems/**").hasRole("ADMIN")
+                // Gemini settings — admin only
                 .requestMatchers("/api/settings/gemini/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()

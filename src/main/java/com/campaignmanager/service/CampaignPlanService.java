@@ -487,9 +487,12 @@ public class CampaignPlanService {
 
     private UserGeminiSettings requireGeminiSettings(Authentication auth) {
         User user = resolveUser(auth);
+        // Try the current user's settings first; fall back to admin's settings
         return geminiSettingsRepository.findByUser(user)
+                .or(() -> userRepository.findByUsername("admin")
+                        .flatMap(geminiSettingsRepository::findByUser))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "No Gemini API key configured. Go to Settings → Gemini to add your API key."));
+                        "No Gemini API key configured. An admin must add a Gemini API key in Settings."));
     }
 
     private String requireApiKey(Authentication auth) {
