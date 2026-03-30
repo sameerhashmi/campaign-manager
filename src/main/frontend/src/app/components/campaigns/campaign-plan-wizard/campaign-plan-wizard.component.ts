@@ -20,6 +20,7 @@ import { NavComponent } from '../../shared/nav/nav.component';
 import { GemService, Gem } from '../../../services/gem.service';
 import { CampaignPlanService, CampaignPlan, ProspectContact, GeneratedEmail, CampaignPlanSummary, CampaignPlanDocument } from '../../../services/campaign-plan.service';
 import { SettingsService, ConnectedSession } from '../../../services/settings.service';
+import { AuthService } from '../../../services/auth.service';
 
 @Component({
   selector: 'app-campaign-plan-wizard',
@@ -884,7 +885,8 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
     private settingsService: SettingsService,
     private router: Router,
     private route: ActivatedRoute,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private authService: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -921,7 +923,11 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   }
 
   checkGeminiStatus(): void {
-    // Check via settings endpoint — if request succeeds and connected is true
+    // Non-admins use the admin's Gemini key — skip the check and treat as connected
+    if (!this.authService.isAdmin()) {
+      this.geminiConnected = true;
+      return;
+    }
     fetch('/api/settings/gemini', {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('cm_jwt')}` }
     }).then(r => r.json()).then((d: any) => {

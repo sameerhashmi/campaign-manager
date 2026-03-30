@@ -37,14 +37,14 @@ public class GemService {
     private final DocumentTextExtractorService documentTextExtractorService;
 
     public List<GemDto> findAll(Authentication auth) {
-        User owner = resolveUser(auth);
+        User owner = resolveGemOwner(auth);
         return gemRepository.findAllByOwner(owner).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
     public List<GemDto> findByType(Authentication auth, String gemType) {
-        User owner = resolveUser(auth);
+        User owner = resolveGemOwner(auth);
         return gemRepository.findAllByOwnerAndGemType(owner, gemType).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
@@ -153,5 +153,14 @@ public class GemService {
     private User resolveUser(Authentication auth) {
         return userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    }
+
+    /** For reads, non-admin users see admin's gems. */
+    private User resolveGemOwner(Authentication auth) {
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (isAdmin) return resolveUser(auth);
+        return userRepository.findByUsername("admin")
+                .orElseGet(() -> resolveUser(auth));
     }
 }
