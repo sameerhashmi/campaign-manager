@@ -186,15 +186,6 @@ public class SettingsController {
                 return ResponseEntity.badRequest().body(dto);
             }
 
-            // Non-admin: session email must match the user's login email
-            if (!isAdmin(auth) && !email.equalsIgnoreCase(auth.getName())) {
-                Files.deleteIfExists(tempPath);
-                GmailSessionStatusDto dto = buildStatus(auth);
-                dto.setMessage("This session belongs to " + email + ". " +
-                        "Please upload a session for " + auth.getName() + ".");
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(dto);
-            }
-
             Path finalPath = sessionService.getSessionPath(email);
             Files.move(tempPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
             sessionService.invalidateCachedContext(email);
