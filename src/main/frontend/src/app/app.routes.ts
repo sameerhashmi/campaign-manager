@@ -29,19 +29,19 @@ export const routes: Routes = [
   },
   {
     path: 'campaigns/plan',
-    canActivate: [authGuard, adminGuard],
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./components/campaigns/campaign-plan-wizard/campaign-plan-wizard.component').then(m => m.CampaignPlanWizardComponent)
   },
   {
     path: 'campaigns/plan/:planId',
-    canActivate: [authGuard, adminGuard],
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./components/campaigns/campaign-plan-wizard/campaign-plan-wizard.component').then(m => m.CampaignPlanWizardComponent)
   },
   {
     path: 'campaigns/plan/:planId/detail',
-    canActivate: [authGuard, adminGuard],
+    canActivate: [authGuard],
     loadComponent: () =>
       import('./components/campaigns/campaign-v2-detail/campaign-v2-detail.component').then(m => m.CampaignV2DetailComponent)
   },

@@ -36,12 +36,10 @@ import { Campaign } from '../../../models/campaign.model';
         <div class="page-header">
           <h1>Campaigns</h1>
           <div class="header-actions">
-            @if (isAdmin) {
-              <button mat-stroked-button color="primary" routerLink="/campaigns/plan"
-                      matTooltip="AI-powered campaign wizard — generates contacts and emails from your Drive folder">
-                <mat-icon>auto_awesome</mat-icon> Plan Campaign
-              </button>
-            }
+            <button mat-stroked-button color="primary" routerLink="/campaigns/plan"
+                    matTooltip="AI-powered campaign wizard — generates contacts and emails from your Drive folder">
+              <mat-icon>auto_awesome</mat-icon> Plan Campaign
+            </button>
             <button mat-raised-button color="primary" routerLink="/campaigns/new">
               <mat-icon>add</mat-icon> New Campaign
             </button>

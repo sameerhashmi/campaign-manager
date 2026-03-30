@@ -447,10 +447,12 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                               <span class="recipient-name">{{ activeContact.name }}</span>
                               <div class="schedule-field-wrap" style="margin-top:4px">
                                 <label class="schedule-label">Scheduled Date &amp; Time</label>
-                                <input type="datetime-local" class="schedule-input"
-                                       [value]="toDatetimeLocal(activeEmail.scheduledAt)"
-                                       (change)="onScheduleChange(activeEmail, $any($event.target).value)"
-                                       (blur)="saveEmail(activeEmail)">
+                                <div style="display:flex;align-items:center;gap:6px">
+                                  <input type="datetime-local" class="schedule-input"
+                                         [value]="toDatetimeLocal(activeEmail.scheduledAt)"
+                                         (change)="onScheduleChange(activeEmail, $any($event.target).value)">
+                                  <button type="button" class="schedule-ok-btn" (click)="saveEmail(activeEmail)" matTooltip="Save">OK</button>
+                                </div>
                               </div>
                               <mat-form-field appearance="outline" class="recipient-email-field" style="margin-top:6px">
                                 <mat-label>Email address</mat-label>
@@ -575,22 +577,22 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                     <span>Clicking <strong>Save Campaign</strong> creates the campaign with all contacts and scheduled emails.
                     Use the <strong>Launch</strong> button on the campaign detail page to start sending.</span>
                   </div>
+
+                  <div class="step-actions" style="justify-content:flex-start;margin-top:20px">
+                    <button mat-stroked-button (click)="cancel()">Cancel</button>
+                    <button mat-stroked-button matStepperPrevious>
+                      <mat-icon>arrow_back</mat-icon> Back
+                    </button>
+                    <button mat-raised-button color="primary"
+                            [disabled]="saving"
+                            (click)="saveCampaign()">
+                      @if (saving) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
+                      <mat-icon>save</mat-icon>
+                      Save Campaign
+                    </button>
+                  </div>
                 </div>
               }
-
-              <div class="step-actions">
-                <button mat-stroked-button (click)="cancel()">Cancel</button>
-                <button mat-stroked-button matStepperPrevious>
-                  <mat-icon>arrow_back</mat-icon> Back
-                </button>
-                <button mat-raised-button color="primary"
-                        [disabled]="saving"
-                        (click)="saveCampaign()">
-                  @if (saving) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
-                  <mat-icon>save</mat-icon>
-                  Save Campaign
-                </button>
-              </div>
             </div>
           </mat-step>
 
@@ -702,6 +704,12 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
     .schedule-label {
       font-size: 11px; color: #5f6368; font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .schedule-ok-btn {
+      height: 40px; padding: 0 14px; background: #1a73e8; color: white;
+      border: none; border-radius: 4px; font-size: 13px; font-weight: 600;
+      cursor: pointer; flex-shrink: 0; transition: background 0.15s;
+      &:hover { background: #1558b0; }
     }
     .schedule-input {
       width: 100%; height: 40px; padding: 0 10px; box-sizing: border-box;
