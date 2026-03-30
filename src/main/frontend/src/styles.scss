@@ -420,7 +420,23 @@ html, body {
     border-color: rgba(255,255,255,0.1) !important;
   }
   .recipient-name  { color: rgba(255,255,255,0.87) !important; }
-  .schedule-info   { color: rgba(255,255,255,0.45) !important; }
+  .schedule-label  { color: rgba(255,255,255,0.45) !important; }
+  .schedule-input  {
+    border-color: rgba(255,255,255,0.2) !important;
+    color: rgba(255,255,255,0.87) !important;
+    color-scheme: dark;
+    &:focus { border-color: #0ea5e9 !important; }
+    &:hover { border-color: rgba(255,255,255,0.45) !important; }
+  }
+
+  /* V2 detail Emails tab */
+  .email-item-subject { color: rgba(255,255,255,0.75) !important; }
+  .field-label  { color: rgba(255,255,255,0.4) !important; }
+  .field-value  { color: rgba(255,255,255,0.87) !important; }
+  .email-body-view {
+    background: rgba(255,255,255,0.04) !important;
+    color: rgba(255,255,255,0.8) !important;
+  }
 
   /* Dashboard */
   .gmail-warning {

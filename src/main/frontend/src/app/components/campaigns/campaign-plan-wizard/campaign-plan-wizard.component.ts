@@ -445,7 +445,14 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                             <mat-icon>person</mat-icon>
                             <div class="recipient-fields">
                               <span class="recipient-name">{{ activeContact.name }}</span>
-                              <mat-form-field appearance="outline" class="recipient-email-field">
+                              <div class="schedule-field-wrap" style="margin-top:4px">
+                                <label class="schedule-label">Scheduled Date &amp; Time</label>
+                                <input type="datetime-local" class="schedule-input"
+                                       [value]="toDatetimeLocal(activeEmail.scheduledAt)"
+                                       (change)="onScheduleChange(activeEmail, $any($event.target).value)"
+                                       (blur)="saveEmail(activeEmail)">
+                              </div>
+                              <mat-form-field appearance="outline" class="recipient-email-field" style="margin-top:6px">
                                 <mat-label>Email address</mat-label>
                                 <input matInput [(ngModel)]="activeContact.email"
                                        (blur)="saveContactEmail(activeContact)"
@@ -465,15 +472,6 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
                           <textarea matInput [(ngModel)]="activeEmail.body"
                                     (blur)="saveEmail(activeEmail)"
                                     rows="18" class="email-body-textarea"></textarea>
-                        </mat-form-field>
-                        <mat-form-field appearance="outline" class="full-width">
-                          <mat-label>Scheduled Date &amp; Time</mat-label>
-                          <input matInput type="datetime-local"
-                                 [ngModel]="toDatetimeLocal(activeEmail.scheduledAt)"
-                                 (ngModelChange)="onScheduleChange(activeEmail, $event)"
-                                 (blur)="saveEmail(activeEmail)">
-                          <mat-icon matSuffix>schedule</mat-icon>
-                          <mat-hint>Change to reschedule — saves automatically</mat-hint>
                         </mat-form-field>
                       </div>
                     }
@@ -696,7 +694,23 @@ import { SettingsService, ConnectedSession } from '../../../services/settings.se
     }
     .recipient-fields { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
     .recipient-name { font-size: 13px; font-weight: 600; color: #202124; }
-    .recipient-email-field { width: 100%; margin-top: 4px; }
+    .recipient-row { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+    .recipient-email-field { flex: 1; min-width: 180px; margin: 0; }
+    .schedule-field-wrap {
+      display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;
+    }
+    .schedule-label {
+      font-size: 11px; color: #5f6368; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .schedule-input {
+      width: 100%; height: 40px; padding: 0 10px; box-sizing: border-box;
+      border: 1px solid rgba(0,0,0,0.23); border-radius: 4px;
+      font-size: 13px; color: #202124;
+      background: transparent; cursor: pointer;
+      &:focus { outline: none; border-color: #0ea5e9; }
+      &:hover { border-color: rgba(0,0,0,0.6); }
+    }
 
     /* Step 1 card — two-column layout */
     .step1-card { max-width: 1040px; }
