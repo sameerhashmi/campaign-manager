@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -47,6 +48,7 @@ public class CampaignPlanService {
     private final CampaignPlanDocumentRepository documentRepository;
     private final DocumentTextExtractorService documentTextExtractorService;
     private final GoogleDriveImportService googleDriveImportService;
+    private final ExcelImportService excelImportService;
     private final EmailGenerationAsyncWorker emailWorker;
 
     private final ConcurrentHashMap<Long, String> emailErrors = new ConcurrentHashMap<>();
@@ -189,6 +191,17 @@ public class CampaignPlanService {
             }
         }
 
+        // Apply email format to any selected contact still missing an email
+        String emailFormat = plan.getEmailFormat();
+        if (emailFormat != null && !emailFormat.isBlank()) {
+            selected.forEach(pc -> {
+                if (pc.getEmail() == null || pc.getEmail().isBlank()) {
+                    pc.setEmail(applyEmailFormat(emailFormat, pc.getName()));
+                    prospectContactRepository.save(pc);
+                }
+            });
+        }
+
         // Snapshot all data needed by the async thread (no JPA proxies, no SecurityContext)
         List<ProspectContactDto> contactDtos = selected.stream().map(this::toProspectDto).collect(Collectors.toList());
         List<Long> contactIds = selected.stream().map(ProspectContact::getId).collect(Collectors.toList());
@@ -198,6 +211,7 @@ public class CampaignPlanService {
         String apiKey = geminiSettings.getApiKey();
         String model = geminiSettings.getModel();
         String systemInstructions = plan.getEmailGem().getSystemInstructions();
+        String senderName = deriveNameFromEmail(plan.getGmailEmail());
 
         // Set processing status and clear any previous error
         emailErrors.remove(planId);
@@ -206,7 +220,7 @@ public class CampaignPlanService {
 
         // Fire and forget — the worker runs in a Spring-managed async thread
         emailWorker.process(planId, contactDtos, contactIds, apiKey, model,
-                systemInstructions, corpus, schedule, emailErrors);
+                systemInstructions, corpus, schedule, senderName, emailErrors);
 
         log.info("Email generation started async for plan {} ({} contacts)", planId, selected.size());
     }
@@ -534,6 +548,26 @@ public class CampaignPlanService {
         return local + domain;
     }
 
+    /**
+     * Derives a display name from a Gmail address.
+     * e.g. "john.smith@broadcom.com" → "John Smith"
+     *      "jsmith@broadcom.com"     → "Jsmith"
+     */
+    private String deriveNameFromEmail(String email) {
+        if (email == null || email.isBlank()) return "";
+        String local = email.contains("@") ? email.substring(0, email.indexOf('@')) : email;
+        String[] parts = local.split("[._\\-]");
+        StringBuilder name = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isBlank()) {
+                if (name.length() > 0) name.append(' ');
+                name.append(Character.toUpperCase(part.charAt(0)));
+                if (part.length() > 1) name.append(part.substring(1).toLowerCase());
+            }
+        }
+        return name.toString();
+    }
+
     // ─── Document Management ──────────────────────────────────────────────────
 
     public List<CampaignPlanDocumentDto> getDocuments(Long planId, Authentication auth) {
@@ -619,7 +653,7 @@ public class CampaignPlanService {
                 pc.setSenioritySignal(cell(row, colIdx, "seniority", "seniority signal", "level"));
                 pc.setTanzuRelevance(cell(row, colIdx, "relevance", "tanzu relevance", "priority"));
                 pc.setSource("excel-import");
-                pc.setSelected(true);
+                pc.setSelected(false);
                 imported.add(prospectContactRepository.save(pc));
             }
         } catch (IOException e) {
@@ -630,7 +664,83 @@ public class CampaignPlanService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "No contacts found in the Excel file. Make sure row 1 is a header row with at least a 'Name' column.");
         }
+
+        // Apply email format to contacts missing an email address
+        String emailFormat = plan.getEmailFormat();
+        if (emailFormat != null && !emailFormat.isBlank()) {
+            imported.forEach(pc -> {
+                if (pc.getEmail() == null || pc.getEmail().isBlank()) {
+                    pc.setEmail(applyEmailFormat(emailFormat, pc.getName()));
+                    prospectContactRepository.save(pc);
+                }
+            });
+        }
+
         log.info("Imported {} contacts from Excel for plan {}", imported.size(), planId);
+        return imported.stream().map(this::toProspectDto).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<ProspectContactDto> importContactsFromGSheet(Long planId, String url, Authentication auth) {
+        CampaignPlan plan = resolvePlan(planId, auth);
+        byte[] bytes;
+        try {
+            bytes = excelImportService.downloadGoogleSheetBytes(url);
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+
+        prospectContactRepository.deleteAllByCampaignPlan(plan);
+        List<ProspectContact> imported = new ArrayList<>();
+        try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = wb.getSheetAt(0);
+            Row header = sheet.getRow(0);
+            if (header == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sheet is empty");
+
+            Map<String, Integer> colIdx = new HashMap<>();
+            for (Cell c : header) {
+                if (c != null) colIdx.put(c.toString().trim().toLowerCase(), c.getColumnIndex());
+            }
+
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                String name = cell(row, colIdx, "name", "full name", "contact name");
+                if (name == null || name.isBlank()) continue;
+                ProspectContact pc = new ProspectContact();
+                pc.setCampaignPlan(plan);
+                pc.setName(name.trim());
+                pc.setTitle(cell(row, colIdx, "title", "job title", "role", "position"));
+                pc.setEmail(cell(row, colIdx, "email", "email address", "work email"));
+                pc.setRoleType(cell(row, colIdx, "role type", "roletype", "type"));
+                pc.setTeamDomain(cell(row, colIdx, "team", "team domain", "department", "company", "organization"));
+                pc.setSenioritySignal(cell(row, colIdx, "seniority", "seniority signal", "level"));
+                pc.setTanzuRelevance(cell(row, colIdx, "relevance", "tanzu relevance", "priority"));
+                pc.setSource("gsheet-import");
+                pc.setSelected(false);
+                imported.add(prospectContactRepository.save(pc));
+            }
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to read sheet: " + e.getMessage());
+        }
+
+        if (imported.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "No contacts found. Make sure row 1 is a header with at least a 'Name' column.");
+        }
+
+        // Apply email format to contacts missing an email address
+        String emailFormat = plan.getEmailFormat();
+        if (emailFormat != null && !emailFormat.isBlank()) {
+            imported.forEach(pc -> {
+                if (pc.getEmail() == null || pc.getEmail().isBlank()) {
+                    pc.setEmail(applyEmailFormat(emailFormat, pc.getName()));
+                    prospectContactRepository.save(pc);
+                }
+            });
+        }
+
+        log.info("Imported {} contacts from Google Sheet for plan {}", imported.size(), planId);
         return imported.stream().map(this::toProspectDto).collect(Collectors.toList());
     }
 

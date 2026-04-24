@@ -125,7 +125,7 @@ public class GemService {
             List<LocalDateTime> schedule = EmailScheduleCalculator.calculateSchedule(LocalDate.now());
             List<GeneratedEmailDto> emails = geminiApiService.generateEmails(
                     settings.getApiKey(), settings.getModel(), gem.getSystemInstructions(),
-                    testContact, schedule, corpus);
+                    testContact, schedule, corpus, "");
             result.put("emails", emails);
         }
         return result;

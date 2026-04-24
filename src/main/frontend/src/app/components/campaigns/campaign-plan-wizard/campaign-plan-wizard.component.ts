@@ -103,26 +103,6 @@ import { AuthService } from '../../../services/auth.service';
                     <div class="step1-col">
                       <div class="col-section-title">Research Criteria</div>
                       <form [formGroup]="step1Form" class="step-form">
-                        @if (docsMode !== 'excel') {
-                        <mat-form-field appearance="outline" class="full-width">
-                          <mat-label>Contact Research Gem *</mat-label>
-                          <mat-select formControlName="contactGemId">
-                            @for (gem of contactGems; track gem.id) {
-                              <mat-option [value]="gem.id">{{ gem.name }}</mat-option>
-                            }
-                            @if (contactGems.length === 0) {
-                              <mat-option disabled>No Contact Research Gems found — create one in Settings</mat-option>
-                            }
-                          </mat-select>
-                          <mat-hint>Extracts prospect contacts from your briefing documents.</mat-hint>
-                        </mat-form-field>
-                        } @else {
-                          <div class="excel-mode-note">
-                            <mat-icon style="color:#38a169;font-size:18px;width:18px;height:18px">check_circle</mat-icon>
-                            <span>Contact Research Gem not needed — contacts will be imported from Excel.</span>
-                          </div>
-                        }
-
                         <mat-form-field appearance="outline" class="full-width">
                           <mat-label>Email Generation Gem *</mat-label>
                           <mat-select formControlName="emailGemId">
@@ -146,89 +126,24 @@ import { AuthService } from '../../../services/auth.service';
                       <strong>Briefing Documents *</strong>
                     </div>
                     <div class="section-sub">
-                      Gemini reads these documents to identify contacts and generate personalized emails.
+                      Paste your Google Sheet link to import the contact list.
                     </div>
 
-                    <!-- Mode tabs -->
-                    <div class="mode-tabs">
-                      <button type="button" class="mode-tab" [class.active]="docsMode === 'drive'"
-                              (click)="setDocsMode('drive')">
-                        <mat-icon>add_to_drive</mat-icon> Google Docs Links
-                      </button>
-                      <button type="button" class="mode-tab" [class.active]="docsMode === 'upload'"
-                              (click)="setDocsMode('upload')">
-                        <mat-icon>upload_file</mat-icon> Upload Files
-                      </button>
-                      <button type="button" class="mode-tab" [class.active]="docsMode === 'excel'"
-                              (click)="setDocsMode('excel')">
-                        <mat-icon>table_chart</mat-icon> Import from Excel
-                      </button>
+                    <mat-form-field appearance="outline" style="width:100%">
+                      <mat-label>Google Sheet URL</mat-label>
+                      <input matInput [(ngModel)]="sheetUrl"
+                             placeholder="https://docs.google.com/spreadsheets/d/...">
+                      <mat-icon matSuffix>add_to_drive</mat-icon>
+                      <mat-hint>Paste the Google Sheet link containing your contact list (Name, Title columns)</mat-hint>
+                    </mat-form-field>
+                    <div class="drive-info">
+                      <mat-icon class="drive-info-icon">info</mat-icon>
+                      <div>
+                        The sheet must be shared with the Gmail account connected in Settings.
+                        Row 1 must be a header row with at least a <strong>Name</strong> column.
+                        Optional columns: <strong>Title, Email, Team, Seniority, Relevance</strong>.
+                      </div>
                     </div>
-
-                    <!-- Google Drive mode -->
-                    @if (docsMode === 'drive') {
-                      <mat-form-field appearance="outline" style="width:100%">
-                        <mat-label>Google Doc / Slides URLs (one per line)</mat-label>
-                        <textarea matInput [(ngModel)]="driveImportUrls" rows="4"
-                                  placeholder="https://docs.google.com/document/d/...&#10;https://docs.google.com/presentation/d/..."></textarea>
-                        <mat-icon matSuffix>add_to_drive</mat-icon>
-                        <mat-hint>Paste individual Google Docs or Slides share links, one per line</mat-hint>
-                      </mat-form-field>
-                      <div class="drive-info">
-                        <mat-icon class="drive-info-icon">info</mat-icon>
-                        <div>
-                          Open each file in Google Drive → <strong>Share → Copy link</strong>, then paste here.
-                          Works with <strong>Google Docs and Slides</strong>.
-                          Make sure your Gmail account is connected in Settings.
-                        </div>
-                      </div>
-                    }
-
-                    <!-- Upload Files mode -->
-                    @if (docsMode === 'upload') {
-                      <div class="file-drop-area" (click)="fileInput.click()"
-                           [class.has-file]="pendingFiles.length > 0">
-                        <mat-icon>upload_file</mat-icon>
-                        @if (pendingFiles.length > 0) {
-                          <span>{{ pendingFiles.length }} file(s) selected — click to add more</span>
-                        } @else {
-                          <span>Click to select one or more files (PDF, DOCX, TXT, HTML)</span>
-                        }
-                        <input #fileInput type="file" multiple accept=".html,.htm,.pdf,.docx,.txt"
-                               hidden (change)="onFilesSelected($event)">
-                      </div>
-                      <div class="drive-info">
-                        <mat-icon class="drive-info-icon">info</mat-icon>
-                        <div>
-                          You can select <strong>multiple files</strong> at once (hold Ctrl/Cmd while selecting).
-                          Supported: <strong>PDF, DOCX, TXT, HTML</strong>.
-                        </div>
-                      </div>
-                    }
-
-                    <!-- Import from Excel mode -->
-                    @if (docsMode === 'excel') {
-                      <div class="file-drop-area" (click)="excelFileInput.click()"
-                           [class.has-file]="!!excelFile">
-                        <mat-icon>table_chart</mat-icon>
-                        @if (excelFile) {
-                          <span>{{ excelFile.name }} — click to change</span>
-                        } @else {
-                          <span>Click to select an Excel file (.xlsx)</span>
-                        }
-                        <input #excelFileInput type="file" accept=".xlsx,.xls"
-                               hidden (change)="onExcelFileSelected($event)">
-                      </div>
-                      <div class="drive-info">
-                        <mat-icon class="drive-info-icon">info</mat-icon>
-                        <div>
-                          Row 1 must be a header row. Required column: <strong>Name</strong>.
-                          Optional: <strong>Title, Email, Team, Seniority, Relevance</strong>.
-                          Contacts will be pre-selected — you can deselect on the next step.
-                          <br>Contact Research Gem is <strong>not required</strong> in this mode.
-                        </div>
-                      </div>
-                    }
 
                     <!-- Document list (shown in both modes) -->
                     @if (uploadedDocs.length > 0 || pendingFiles.length > 0) {
@@ -265,7 +180,7 @@ import { AuthService } from '../../../services/auth.service';
                         [disabled]="isStep1Invalid() || savingStep1"
                         (click)="saveStep1(stepper)">
                   @if (savingStep1) { <mat-spinner diameter="18" style="display:inline-block;margin-right:6px"></mat-spinner> }
-                  {{ savingStep1 ? (docsMode === 'drive' ? 'Importing docs…' : (docsMode === 'excel' ? 'Importing contacts…' : 'Uploading…')) : (docsMode === 'excel' ? 'Next: Import Customer List' : 'Next: Generate Customer List') }}
+                  {{ savingStep1 ? 'Importing from Sheet…' : 'Next: Import Customer List' }}
                   @if (!savingStep1) { <mat-icon>arrow_forward</mat-icon> }
                 </button>
               </div>
@@ -311,19 +226,19 @@ import { AuthService } from '../../../services/auth.service';
               } @else {
                 <div class="table-toolbar">
                   <p class="step-desc">{{ contacts.length }} contact(s) found. Select who to include.</p>
-                  <div class="toolbar-actions">
-                    <button mat-stroked-button (click)="selectAll()">Select All</button>
-                    <button mat-stroked-button (click)="deselectAll()">Deselect All</button>
-                    <button mat-stroked-button (click)="generateContacts()">
-                      <mat-icon>refresh</mat-icon> Re-generate
-                    </button>
-                  </div>
+                  <div class="toolbar-actions"></div>
                 </div>
 
                 <div class="contacts-table-wrap">
                   <table mat-table [dataSource]="contacts" class="contacts-table">
                     <ng-container matColumnDef="select">
-                      <th mat-header-cell *matHeaderCellDef style="width:48px"></th>
+                      <th mat-header-cell *matHeaderCellDef style="width:48px">
+                        <mat-checkbox
+                          [checked]="allContactsSelected"
+                          [indeterminate]="someContactsSelected"
+                          (change)="toggleAllContacts($event)">
+                        </mat-checkbox>
+                      </th>
                       <td mat-cell *matCellDef="let c">
                         <mat-checkbox [(ngModel)]="c.selected" (change)="onContactSelectionChange(c)"></mat-checkbox>
                       </td>
@@ -842,7 +757,6 @@ import { AuthService } from '../../../services/auth.service';
 export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   private emailPollInterval: any = null;
   step1Form!: FormGroup;
-  contactGems: Gem[] = [];
   emailGems: Gem[] = [];
   gmailSessions: ConnectedSession[] = [];
   geminiConnected = false;
@@ -853,8 +767,9 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   pendingFiles: File[] = [];
   driveImportUrls = '';
   importingFromDrive = false;
-  docsMode: 'drive' | 'upload' | 'excel' = 'drive';
+  docsMode: 'gsheet' = 'gsheet';
   excelFile: File | null = null;
+  sheetUrl = '';
 
   contacts: ProspectContact[] = [];
   generatingContacts = false;
@@ -894,7 +809,6 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
       name: ['', Validators.required],
       customer: ['', Validators.required],
       gmailEmail: [null],
-      contactGemId: [null, Validators.required],
       emailGemId: [null, Validators.required],
       emailFormat: ['firstname.lastname@company.com']
     });
@@ -911,7 +825,6 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
   }
 
   loadGems(): void {
-    this.gemService.getByType('CONTACT_RESEARCH').subscribe(g => this.contactGems = g);
     this.gemService.getByType('EMAIL_GENERATION').subscribe(g => this.emailGems = g);
   }
 
@@ -941,7 +854,6 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
         name: plan.name,
         customer: plan.customer,
         gmailEmail: plan.gmailEmail,
-        contactGemId: plan.contactGemId,
         emailGemId: plan.emailGemId,
         emailFormat: plan.emailFormat || 'firstname.lastname@company.com'
       });
@@ -949,30 +861,20 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
     this.planService.getDocuments(id).subscribe(docs => this.uploadedDocs = docs);
   }
 
-  setDocsMode(mode: 'drive' | 'upload' | 'excel'): void {
+  setDocsMode(mode: 'gsheet'): void {
     this.docsMode = mode;
-    const ctrl = this.step1Form.get('contactGemId')!;
-    if (mode === 'excel') {
-      ctrl.clearValidators();
-    } else {
-      ctrl.setValidators(Validators.required);
-    }
-    ctrl.updateValueAndValidity();
   }
 
   hasDocuments(): boolean {
-    if (this.docsMode === 'drive') return !!this.driveImportUrls.trim() || this.uploadedDocs.length > 0;
-    if (this.docsMode === 'excel') return !!this.excelFile;
-    return this.pendingFiles.length > 0 || this.uploadedDocs.length > 0;
+    return !!this.sheetUrl.trim();
   }
 
   isStep1Invalid(): boolean {
-    if (this.docsMode === 'excel') {
-      // In Excel mode only name, customer, and emailGemId are required
-      const f = this.step1Form;
-      return !f.get('name')?.valid || !f.get('customer')?.valid || !this.excelFile;
+    const f = this.step1Form;
+    if (this.docsMode === 'gsheet') {
+      return !f.get('name')?.valid || !f.get('customer')?.valid || !this.sheetUrl.trim();
     }
-    return this.step1Form.invalid || !this.hasDocuments();
+    return !f.get('name')?.valid || !f.get('customer')?.valid || !f.get('emailGemId')?.valid || !this.hasDocuments();
   }
 
   onExcelFileSelected(event: Event): void {
@@ -1001,60 +903,20 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
       next: plan => {
         this.planId = plan.id!;
 
-        if (this.docsMode === 'excel' && this.excelFile) {
-          // Import contacts directly from Excel — skip Gemini contact research
-          this.planService.importContactsFromExcel(this.planId, this.excelFile).subscribe({
-            next: imported => {
-              this.contacts = imported;
-              this.excelFile = null;
-              this.savingStep1 = false;
-              stepper.selectedIndex = 1;
-              // Mark step 2 as ready — no Gemini call needed
-              this.step2Completed = false;
-            },
-            error: err => {
-              this.savingStep1 = false;
-              this.snackBar.open(err?.error?.message ?? 'Failed to import Excel file', 'Close', { duration: 8000 });
-            }
-          });
-        } else if (this.docsMode === 'drive' && this.driveImportUrls.trim()) {
-          // Import files from individual Drive/Docs URLs, then advance
-          const urls = this.parseDriveUrls();
-          this.planService.importDocumentsFromDrive(this.planId, urls).subscribe({
-            next: newDocs => {
-              this.uploadedDocs = [...this.uploadedDocs, ...newDocs];
-              this.driveImportUrls = '';
-              this.savingStep1 = false;
-              stepper.selectedIndex = 1;
-              this.generateContacts();
-            },
-            error: err => {
-              this.savingStep1 = false;
-              const msg = err?.error?.message ?? 'Failed to import documents. Make sure the links are Google Docs or Slides and your Gmail account is connected in Settings.';
-              this.snackBar.open(msg, 'Close', { duration: 10000 });
-            }
-          });
-        } else if (this.pendingFiles.length > 0) {
-          // Upload local files, then advance
-          this.planService.uploadDocuments(this.planId, this.pendingFiles).subscribe({
-            next: newDocs => {
-              this.uploadedDocs = [...this.uploadedDocs, ...newDocs];
-              this.pendingFiles = [];
-              this.savingStep1 = false;
-              stepper.selectedIndex = 1;
-              this.generateContacts();
-            },
-            error: err => {
-              this.savingStep1 = false;
-              this.snackBar.open('Failed to upload documents: ' + (err?.error?.message ?? err.message), 'Close', { duration: 6000 });
-            }
-          });
-        } else {
-          // Already have uploaded docs, just advance
-          this.savingStep1 = false;
-          stepper.selectedIndex = 1;
-          this.generateContacts();
-        }
+        // Import contacts from a Google Sheet URL
+        this.planService.importContactsFromGSheet(this.planId, this.sheetUrl.trim()).subscribe({
+          next: imported => {
+            this.contacts = imported;
+            this.sheetUrl = '';
+            this.savingStep1 = false;
+            stepper.selectedIndex = 1;
+            this.step2Completed = false;
+          },
+          error: err => {
+            this.savingStep1 = false;
+            this.snackBar.open(err?.error?.message ?? 'Failed to import Google Sheet', 'Close', { duration: 8000 });
+          }
+        });
       },
       error: err => {
         this.savingStep1 = false;
@@ -1153,6 +1015,19 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
     return this.contacts.filter(c => c.selected);
   }
 
+  get allContactsSelected(): boolean {
+    return this.contacts.length > 0 && this.contacts.every(c => c.selected);
+  }
+
+  get someContactsSelected(): boolean {
+    return this.contacts.some(c => c.selected) && !this.allContactsSelected;
+  }
+
+  toggleAllContacts(event: any): void {
+    const select = event.checked;
+    this.contacts.forEach(c => { c.selected = select; });
+  }
+
   selectAll(): void { this.contacts.forEach(c => c.selected = true); }
   deselectAll(): void { this.contacts.forEach(c => c.selected = false); }
 
@@ -1218,6 +1093,7 @@ export class CampaignPlanWizardComponent implements OnInit, OnDestroy {
 
   private loadEmailsAndAdvance(stepper: any): void {
     const selected = this.selectedContacts;
+    this.step2Completed = true;
     if (selected.length === 0) {
       this.generatingEmails = false;
       stepper.selectedIndex = 2;

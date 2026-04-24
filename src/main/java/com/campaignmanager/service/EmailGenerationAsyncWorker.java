@@ -41,6 +41,7 @@ public class EmailGenerationAsyncWorker {
                         String systemInstructions,
                         String corpus,
                         List<LocalDateTime> schedule,
+                        String senderName,
                         ConcurrentHashMap<Long, String> errorStore) {
         try {
             // Fire all Gemini calls in parallel
@@ -49,7 +50,7 @@ public class EmailGenerationAsyncWorker {
                 ProspectContactDto dto = contactDtos.get(i);
                 Long contactId = contactIds.get(i);
                 futures.put(contactId, CompletableFuture.supplyAsync(() ->
-                        geminiApiService.generateEmails(apiKey, model, systemInstructions, dto, schedule, corpus)));
+                        geminiApiService.generateEmails(apiKey, model, systemInstructions, dto, schedule, corpus, senderName)));
             }
 
             // Collect and save

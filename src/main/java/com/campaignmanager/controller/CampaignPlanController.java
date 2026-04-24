@@ -56,6 +56,14 @@ public class CampaignPlanController {
         return ResponseEntity.ok(planService.importContactsFromExcel(id, file, auth));
     }
 
+    @PostMapping("/{id}/contacts/import-gsheet")
+    public ResponseEntity<List<ProspectContactDto>> importContactsFromGSheet(
+            @PathVariable Long id,
+            @RequestParam String url,
+            Authentication auth) {
+        return ResponseEntity.ok(planService.importContactsFromGSheet(id, url, auth));
+    }
+
     @GetMapping("/{id}/contacts")
     public ResponseEntity<List<ProspectContactDto>> getContacts(@PathVariable Long id, Authentication auth) {
         return ResponseEntity.ok(planService.getContacts(id, auth));

@@ -82,6 +82,30 @@ public class ExcelImportService {
      * @param sheetUrl any Google Sheets URL
      * @param replace  if true, clears existing campaign contacts first
      */
+    /** Downloads a Google Sheet / Drive file as raw XLSX bytes using the active Gmail session. */
+    public byte[] downloadGoogleSheetBytes(String sheetUrl) throws Exception {
+        Matcher m = SHEET_ID.matcher(sheetUrl);
+        if (!m.find()) {
+            throw new IllegalArgumentException("Cannot extract Google Sheet ID from URL: " + sheetUrl);
+        }
+        String exportUrl = "https://docs.google.com/spreadsheets/d/" + m.group(1) + "/export?format=xlsx";
+        log.info("Downloading Google Sheet: {}", exportUrl);
+        BrowserContext ctx = sessionService.getSessionContext();
+        APIResponse response = ctx.request().get(exportUrl);
+        if (!response.ok()) {
+            throw new RuntimeException(
+                    "Failed to download Google Sheet (HTTP " + response.status() + "). " +
+                    "Make sure the Gmail session is active and the sheet is shared with the signed-in account.");
+        }
+        byte[] body = response.body();
+        if (body.length < 4 || body[0] != 0x50 || body[1] != 0x4B) {
+            throw new RuntimeException(
+                    "Google Sheet download did not return a valid Excel file. " +
+                    "The Gmail session may have expired — re-upload it in Settings.");
+        }
+        return body;
+    }
+
     public ExcelImportResultDto importFromGoogleSheet(Long campaignId, String sheetUrl, boolean replace) throws Exception {
         Matcher m = SHEET_ID.matcher(sheetUrl);
         if (!m.find()) {

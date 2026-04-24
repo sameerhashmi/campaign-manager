@@ -232,7 +232,7 @@ html, body {
 
   /* ── Status chips in dark mode ────────────────────────── */
   .status-chip, .chip {
-    &.draft, &.DRAFT         { background: rgba(230,81,0,0.15); color: #fb923c; }
+    &.draft, &.DRAFT         { background: rgba(230,81,0,0.15);   color: #fb923c; }
     &.active, &.ACTIVE       { background: rgba(52,211,153,0.15); color: #34d399; }
     &.paused, &.PAUSED       { background: rgba(251,191,36,0.15); color: #fbbf24; }
     &.completed, &.COMPLETED { background: rgba(167,139,250,0.15); color: #a78bfa; }
@@ -240,6 +240,7 @@ html, body {
     &.sent, &.SENT           { background: rgba(52,211,153,0.15); color: #34d399; }
     &.failed, &.FAILED       { background: rgba(248,113,113,0.15); color: #f87171; }
     &.skipped, &.SKIPPED     { background: rgba(156,163,175,0.12); color: #9ca3af; }
+    &.hold, &.HOLD           { background: rgba(251,191,36,0.12); color: #fbbf24; }
   }
 
   /* ── Snackbars in dark mode ───────────────────────────── */
@@ -309,13 +310,19 @@ html, body {
     }
     &:hover:not(.active) { background: rgba(255,255,255,0.05) !important; }
   }
+  .mode-tabs { border-color: rgba(255,255,255,0.15) !important; }
   .file-drop-area {
     background: rgba(255,255,255,0.03) !important;
     border-color: rgba(255,255,255,0.15) !important;
     color: rgba(255,255,255,0.6) !important;
-    &.has-file { border-color: #0ea5e9 !important; }
+    &.has-file {
+      border-color: #0ea5e9 !important;
+      background: rgba(14,165,233,0.08) !important;
+      color: #38bdf8 !important;
+    }
     &:hover { border-color: rgba(255,255,255,0.3) !important; }
   }
+  .section-title mat-icon, .section-title .mat-icon { color: #38bdf8 !important; }
   .excel-mode-note {
     background: rgba(52,211,153,0.1) !important;
     border-color: rgba(52,211,153,0.25) !important;
@@ -429,6 +436,9 @@ html, body {
     &:hover { border-color: rgba(255,255,255,0.45) !important; }
   }
 
+  /* ── Tab body ─────────────────────────────────────────── */
+  .mat-mdc-tab-body-content { background: transparent !important; }
+
   /* V2 detail Emails tab */
   .email-item-subject { color: rgba(255,255,255,0.75) !important; }
   .field-label  { color: rgba(255,255,255,0.4) !important; }
@@ -437,6 +447,19 @@ html, body {
     background: rgba(255,255,255,0.04) !important;
     color: rgba(255,255,255,0.8) !important;
   }
+
+  /* Email viewer meta (campaign detail Emails tab) */
+  .email-viewer { color: rgba(255,255,255,0.87) !important; }
+  .email-viewer-meta {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+  }
+  .email-viewer-row {
+    border-bottom-color: rgba(255,255,255,0.06) !important;
+    color: rgba(255,255,255,0.87) !important;
+  }
+  .ev-label { color: rgba(255,255,255,0.4) !important; }
+  .ev-subject { color: rgba(255,255,255,0.95) !important; }
 
   /* Dashboard */
   .gmail-warning {
@@ -485,6 +508,46 @@ html, body {
     border-color: rgba(255,255,255,0.1) !important;
     color: rgba(255,255,255,0.5) !important;
     strong { color: rgba(255,255,255,0.87) !important; }
+    a { color: #38bdf8 !important; }
+  }
+  /* Use 3-class specificity (0-3-0) to beat component-scoped !important (0-2-0) */
+  .mat-mdc-card.step-card {
+    border-color: rgba(255,255,255,0.08) !important;
+  }
+  .mat-mdc-card.optional-card {
+    background: rgba(255,255,255,0.03) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+  }
+  .substep-body a { color: #38bdf8 !important; }
+  /* step-icon-wrap icons stay white on gradient bg — no override needed */
+  /* section-badge stays sky-blue — no override needed */
+
+  /* Campaign detail — overview bar */
+  .overview-bar {
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+  }
+  .ov-label { color: rgba(255,255,255,0.45) !important; }
+  .ov-value { color: rgba(255,255,255,0.87) !important; }
+  .overview-divider { background: rgba(255,255,255,0.1) !important; }
+
+  /* Campaign detail — email review panels */
+  .email-review-panels {
+    border-color: rgba(255,255,255,0.12) !important;
+  }
+  .panel-contacts { background: rgba(255,255,255,0.03) !important; }
+  .panel-contacts,
+  .panel-emails,
+  .panel-editor { border-color: rgba(255,255,255,0.12) !important; }
+  .panel-header { border-color: rgba(255,255,255,0.1) !important; }
+  .contact-item.active,
+  .email-item.active { background: rgba(26,115,232,0.25) !important; }
+  .email-count-badge { background: rgba(26,115,232,0.25) !important; color: #93c5fd !important; }
+  .email-viewer-meta { border-color: rgba(255,255,255,0.1) !important; }
+  .email-body-pre {
+    background: rgba(255,255,255,0.04) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    color: rgba(255,255,255,0.87) !important;
   }
 
   /* Scrollbar dark override */

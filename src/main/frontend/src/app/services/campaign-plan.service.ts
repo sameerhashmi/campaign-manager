@@ -157,4 +157,10 @@ export class CampaignPlanService {
       `${this.base}/${planId}/contacts/import-excel`, formData
     );
   }
+
+  importContactsFromGSheet(planId: number, url: string): Observable<ProspectContact[]> {
+    return this.http.post<ProspectContact[]>(
+      `${this.base}/${planId}/contacts/import-gsheet`, null, { params: { url } }
+    );
+  }
 }

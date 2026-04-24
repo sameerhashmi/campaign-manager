@@ -67,37 +67,46 @@ import { EmailJobService } from '../../../services/email-job.service';
             </div>
           </div>
 
+          <!-- ── Overview bar (always visible) ── -->
+          <div class="overview-bar">
+            <div class="overview-item">
+              <span class="ov-label">Company</span>
+              <span class="ov-value">{{ campaign.company || '—' }}</span>
+            </div>
+            <div class="overview-divider"></div>
+            <div class="overview-item">
+              <span class="ov-label">Email Sender</span>
+              <span class="ov-value">{{ campaign.gmailEmail || '—' }}</span>
+            </div>
+            @if (campaign.tanzuContact) {
+              <div class="overview-divider"></div>
+              <div class="overview-item">
+                <span class="ov-label">Tanzu Contact</span>
+                <span class="ov-value">{{ campaign.tanzuContact }}</span>
+              </div>
+            }
+            <div class="overview-divider"></div>
+            <div class="overview-item">
+              <span class="ov-label">Contacts</span>
+              <span class="ov-value">{{ campaign.contactCount }}</span>
+            </div>
+            <div class="overview-divider"></div>
+            <div class="overview-item">
+              <span class="ov-label">Created</span>
+              <span class="ov-value">{{ campaign.createdAt | date:'mediumDate' }}</span>
+            </div>
+            @if (campaign.launchedAt) {
+              <div class="overview-divider"></div>
+              <div class="overview-item">
+                <span class="ov-label">Launched</span>
+                <span class="ov-value">{{ campaign.launchedAt | date:'mediumDate' }}</span>
+              </div>
+            }
+          </div>
+
           <mat-tab-group animationDuration="200ms">
 
-            <!-- TAB 1: Overview -->
-            <mat-tab label="Overview">
-              <div class="tab-content">
-                <mat-card style="max-width:600px">
-                  <mat-card-header><mat-card-title>Campaign Settings</mat-card-title></mat-card-header>
-                  <mat-card-content>
-                    <div class="detail-grid">
-                      @if (campaign.company) {
-                        <div class="detail-row"><span class="label">Company</span><span>{{ campaign.company }}</span></div>
-                      }
-                      <div class="detail-row">
-                        <span class="label">Email Sender</span>
-                        <span>{{ campaign.gmailEmail || '—' }}</span>
-                      </div>
-                      @if (campaign.tanzuContact) {
-                        <div class="detail-row"><span class="label">Tanzu Contact</span><span>{{ campaign.tanzuContact }}</span></div>
-                      }
-                      <div class="detail-row"><span class="label">Contacts</span><span>{{ campaign.contactCount }}</span></div>
-                      <div class="detail-row"><span class="label">Created</span><span>{{ campaign.createdAt | date:'medium' }}</span></div>
-                      @if (campaign.launchedAt) {
-                        <div class="detail-row"><span class="label">Launched</span><span>{{ campaign.launchedAt | date:'medium' }}</span></div>
-                      }
-                    </div>
-                  </mat-card-content>
-                </mat-card>
-              </div>
-            </mat-tab>
-
-            <!-- TAB 2: Contacts -->
+            <!-- TAB 1: Contacts -->
             <mat-tab label="Contacts ({{ enrolledContacts.length }})">
               <div class="tab-content">
                 <div class="tab-actions">
@@ -161,35 +170,6 @@ import { EmailJobService } from '../../../services/email-job.service';
                     <th mat-header-cell *matHeaderCellDef>Company</th>
                     <td mat-cell *matCellDef="let c">{{ c.company || '—' }}</td>
                   </ng-container>
-                  <ng-container matColumnDef="play">
-                    <th mat-header-cell *matHeaderCellDef>Play</th>
-                    <td mat-cell *matCellDef="let c">
-                      @if (c.play) {
-                        <span>{{ c.play }}</span>
-                        @if (c.subPlay) { <div class="cell-sub">{{ c.subPlay }}</div> }
-                      } @else { <span>—</span> }
-                    </td>
-                  </ng-container>
-                  <ng-container matColumnDef="aeRole">
-                    <th mat-header-cell *matHeaderCellDef>AE/SA</th>
-                    <td mat-cell *matCellDef="let c">{{ c.aeRole || '—' }}</td>
-                  </ng-container>
-                  <ng-container matColumnDef="phone">
-                    <th mat-header-cell *matHeaderCellDef>Phone</th>
-                    <td mat-cell *matCellDef="let c">{{ c.phone || '—' }}</td>
-                  </ng-container>
-                  <ng-container matColumnDef="emailLink">
-                    <th mat-header-cell *matHeaderCellDef>Email Doc</th>
-                    <td mat-cell *matCellDef="let c">
-                      @if (c.emailLink) {
-                        <a [href]="c.emailLink" target="_blank" rel="noopener"
-                           matTooltip="Open Google Doc" style="color:#1a73e8">
-                          <mat-icon style="font-size:16px;vertical-align:middle">open_in_new</mat-icon>
-                          View Doc
-                        </a>
-                      } @else { <span>—</span> }
-                    </td>
-                  </ng-container>
                   <ng-container matColumnDef="actions">
                     <th mat-header-cell *matHeaderCellDef></th>
                     <td mat-cell *matCellDef="let c">
@@ -212,7 +192,88 @@ import { EmailJobService } from '../../../services/email-job.service';
               </div>
             </mat-tab>
 
-            <!-- TAB 4: Email Jobs -->
+            <!-- TAB 2: Emails -->
+            <mat-tab label="Emails">
+              <div class="tab-content">
+                @if (emailContacts.length === 0) {
+                  <div class="empty-state">
+                    <mat-icon>mail_outline</mat-icon>
+                    <p>No emails yet. Launch the campaign to generate email jobs.</p>
+                  </div>
+                } @else {
+                  <div class="email-review-panels">
+                    <!-- Panel 1: Contacts -->
+                    <div class="panel panel-contacts">
+                      <div class="panel-header">Contacts ({{ emailContacts.length }})</div>
+                      @for (ec of emailContacts; track ec.email) {
+                        <div class="contact-item"
+                             [class.active]="activeEmailContact === ec"
+                             (click)="selectEmailContact(ec)">
+                          <div class="contact-item-name">{{ ec.name }}</div>
+                          <div class="contact-item-sub">{{ ec.email }}</div>
+                          <span class="email-count-badge">{{ ec.jobs.length }} emails</span>
+                        </div>
+                      }
+                    </div>
+                    <!-- Panel 2: Email list -->
+                    <div class="panel panel-emails">
+                      <div class="panel-header">Emails</div>
+                      @if (!activeEmailContact) {
+                        <div class="panel-empty">Select a contact to view emails</div>
+                      } @else {
+                        @for (job of activeEmailContact.jobs; track job.id) {
+                          <div class="email-item"
+                               [class.active]="activeJob?.id === job.id"
+                               (click)="selectEmailJob(job)">
+                            <div class="email-item-step">Email {{ job.stepNumber }}</div>
+                            <div class="email-item-date">{{ job.scheduledAt | date:'EEE, MMM d, y' }}</div>
+                            <div class="email-item-subject">{{ job.subject }}</div>
+                            <span class="status-chip {{ job.status.toLowerCase() }}">{{ job.status }}</span>
+                          </div>
+                        }
+                      }
+                    </div>
+                    <!-- Panel 3: Body viewer -->
+                    <div class="panel panel-editor">
+                      <div class="panel-header">Email Body</div>
+                      @if (!activeJob) {
+                        <div class="panel-empty">Select an email to preview</div>
+                      } @else {
+                        <div class="email-viewer">
+                          <div class="email-viewer-meta">
+                            <div class="email-viewer-row">
+                              <span class="ev-label">To</span>
+                              <span>{{ activeEmailContact?.name }} &lt;{{ activeEmailContact?.email }}&gt;</span>
+                            </div>
+                            <div class="email-viewer-row">
+                              <span class="ev-label">Subject</span>
+                              <span class="ev-subject">{{ activeJob.subject }}</span>
+                            </div>
+                            <div class="email-viewer-row">
+                              <span class="ev-label">Scheduled</span>
+                              <span>{{ activeJob.scheduledAt | date:'medium' }}</span>
+                            </div>
+                            @if (activeJob.sentAt) {
+                              <div class="email-viewer-row">
+                                <span class="ev-label">Sent</span>
+                                <span style="color:#2e7d32">{{ activeJob.sentAt | date:'medium' }}</span>
+                              </div>
+                            }
+                            <div class="email-viewer-row">
+                              <span class="ev-label">Status</span>
+                              <span class="status-chip {{ activeJob.status.toLowerCase() }}">{{ activeJob.status }}</span>
+                            </div>
+                          </div>
+                          <pre class="email-body-pre">{{ activeJob.body }}</pre>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </mat-tab>
+
+            <!-- TAB 3: Email Jobs -->
             <mat-tab label="Email Jobs ({{ jobsDataSource.data.length }})">
               <div class="tab-content">
                 <div class="jobs-toolbar">
@@ -324,6 +385,73 @@ import { EmailJobService } from '../../../services/email-job.service';
       mat-icon { font-size: 48px; width: 48px; height: 48px; display: block; margin: 0 auto 12px; }
     }
     .jobs-toolbar { margin-bottom: 12px; }
+
+    /* Overview bar */
+    .overview-bar {
+      display: flex; align-items: center;
+      background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 10px;
+      padding: 14px 20px; margin-bottom: 20px; flex-wrap: wrap; gap: 0;
+    }
+    .overview-item { display: flex; flex-direction: column; gap: 2px; padding: 0 16px; }
+    .overview-item:first-child { padding-left: 0; }
+    .overview-divider { width: 1px; background: #e0e0e0; height: 32px; flex-shrink: 0; }
+    .ov-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: #9aa0a6; }
+    .ov-value { font-size: 14px; color: #202124; font-weight: 500; }
+
+    /* Email review panels */
+    .email-review-panels {
+      display: grid;
+      grid-template-columns: 220px 260px 1fr;
+      gap: 0; border: 1px solid #e0e0e0; border-radius: 10px;
+      overflow: hidden; height: calc(100vh - 320px); min-height: 480px;
+    }
+    .panel { display: flex; flex-direction: column; overflow: hidden; }
+    .panel-contacts { border-right: 1px solid #e0e0e0; background: #fafafa; overflow-y: auto; }
+    .panel-emails { border-right: 1px solid #e0e0e0; overflow-y: auto; }
+    .panel-editor { overflow-y: auto; background: inherit; }
+    .panel-header {
+      padding: 12px 16px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #5f6368; background: inherit;
+      border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 1; flex-shrink: 0;
+    }
+    .panel-empty { padding: 32px 16px; color: #9aa0a6; font-size: 13px; text-align: center; }
+    .contact-item {
+      padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.06);
+      &:hover { background: rgba(0,0,0,0.04); }
+      &.active { background: #e8f0fe; border-left: 3px solid #1a73e8; }
+    }
+    .contact-item-name { font-size: 14px; font-weight: 600; }
+    .contact-item-sub { font-size: 12px; color: #5f6368; margin-top: 2px; }
+    .email-count-badge {
+      display: inline-block; margin-top: 4px;
+      background: #e8f0fe; color: #1a73e8; font-size: 11px; font-weight: 600;
+      padding: 1px 7px; border-radius: 10px;
+    }
+    .email-item {
+      padding: 12px 16px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.06);
+      &:hover { background: rgba(0,0,0,0.04); }
+      &.active { background: #e8f0fe; border-left: 3px solid #1a73e8; }
+    }
+    .email-item-step { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #9aa0a6; }
+    .email-item-date { font-size: 11px; color: #5f6368; margin-top: 2px; }
+    .email-item-subject { font-size: 13px; font-weight: 500; margin-top: 4px; }
+    .email-viewer { padding: 16px; display: flex; flex-direction: column; gap: 0; height: 100%; }
+    .email-viewer-meta {
+      border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; margin-bottom: 16px; flex-shrink: 0;
+    }
+    .email-viewer-row {
+      display: flex; align-items: baseline; gap: 12px; padding: 8px 14px;
+      border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 13px;
+      &:last-child { border-bottom: none; }
+    }
+    .ev-label { width: 64px; font-size: 11px; font-weight: 600; color: #9aa0a6; text-transform: uppercase; flex-shrink: 0; }
+    .ev-subject { font-weight: 600; }
+    .email-body-pre {
+      flex: 1; white-space: pre-wrap; word-break: break-word; font-family: inherit;
+      font-size: 13px; line-height: 1.6;
+      background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
+      padding: 16px; margin: 0; overflow-y: auto;
+    }
   `]
 })
 export class CampaignDetailComponent implements OnInit, AfterViewInit {
@@ -341,8 +469,13 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
   importingGSheet = false;
   gsheetUrl = '';
 
-  contactColumns = ['name', 'email', 'company', 'play', 'aeRole', 'phone', 'emailLink', 'actions'];
+  contactColumns = ['name', 'email', 'company', 'actions'];
   jobColumns = ['contact', 'step', 'subject', 'scheduledAt', 'sentAt', 'status', 'hold', 'actions'];
+
+  // Emails tab
+  emailContacts: { name: string; email: string; jobs: EmailJob[] }[] = [];
+  activeEmailContact: { name: string; email: string; jobs: EmailJob[] } | null = null;
+  activeJob: EmailJob | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -381,6 +514,7 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
     this.campaignService.getContacts(id).subscribe(c => this.enrolledContacts = c);
     this.campaignService.getJobs(id).subscribe(j => {
       this.jobsDataSource.data = j;
+      this.buildEmailContacts(j);
     });
     this.contactService.getAll().subscribe(all => {
       this.availableContacts = all.filter(c => !this.enrolledContacts.some(e => e.id === c.id));
@@ -465,8 +599,36 @@ export class CampaignDetailComponent implements OnInit, AfterViewInit {
   refreshJobs(): void {
     this.campaignService.getJobs(this.campaignId).subscribe(j => {
       this.jobsDataSource.data = j;
+      this.buildEmailContacts(j);
       this.snackBar.open('Jobs refreshed', '', { duration: 2000 });
     });
+  }
+
+  private buildEmailContacts(jobs: EmailJob[]): void {
+    const map = new Map<string, { name: string; email: string; jobs: EmailJob[] }>();
+    for (const job of jobs) {
+      const key = job.contactEmail ?? job.contactName ?? '';
+      if (!map.has(key)) {
+        map.set(key, { name: job.contactName ?? '', email: job.contactEmail ?? '', jobs: [] });
+      }
+      map.get(key)!.jobs.push(job);
+    }
+    // Sort jobs within each contact by stepNumber
+    this.emailContacts = Array.from(map.values()).map(ec => ({
+      ...ec,
+      jobs: ec.jobs.sort((a, b) => a.stepNumber - b.stepNumber)
+    }));
+    this.activeEmailContact = null;
+    this.activeJob = null;
+  }
+
+  selectEmailContact(ec: { name: string; email: string; jobs: EmailJob[] }): void {
+    this.activeEmailContact = ec;
+    this.activeJob = ec.jobs[0] ?? null;
+  }
+
+  selectEmailJob(job: EmailJob): void {
+    this.activeJob = job;
   }
 
   retryJob(job: EmailJob): void {

@@ -38,9 +38,14 @@ type Panel = 'campaigns' | 'contacts' | 'sent' | 'scheduled' | 'failed' | null;
       <div class="page-container">
         <div class="page-header">
           <h1>Dashboard</h1>
-          <button mat-raised-button color="primary" routerLink="/campaigns/new">
-            <mat-icon>add</mat-icon> New Campaign
-          </button>
+          <div style="display:flex;gap:8px">
+            <button mat-stroked-button color="primary" routerLink="/campaigns/plan/new">
+              <mat-icon>auto_awesome</mat-icon> Plan Campaign
+            </button>
+            <button mat-raised-button color="primary" routerLink="/campaigns/new">
+              <mat-icon>add</mat-icon> New Campaign
+            </button>
+          </div>
         </div>
 
         @if (loading) {

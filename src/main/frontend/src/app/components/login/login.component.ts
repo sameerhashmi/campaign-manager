@@ -129,9 +129,9 @@ import { AuthService } from '../../services/auth.service';
       padding: 16px 0 8px;
     }
     .login-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
+      font-size: 96px;
+      width: 96px;
+      height: 96px;
       color: #1a73e8;
     }
     h1 { font-size: 22px; font-weight: 600; margin: 8px 0 4px; color: #202124; }

@@ -206,8 +206,9 @@ public class GeminiApiService {
                                                   String systemInstructions,
                                                   ProspectContactDto contact,
                                                   List<LocalDateTime> schedule,
-                                                  String documentCorpus) {
-        String prompt = buildEmailGenerationPrompt(contact, schedule, documentCorpus);
+                                                  String documentCorpus,
+                                                  String senderName) {
+        String prompt = buildEmailGenerationPrompt(contact, schedule, documentCorpus, senderName);
         String rawResponse = call(apiKey, model, buildRequest(prompt, systemInstructions));
         return parseEmailList(rawResponse, schedule);
     }
@@ -226,12 +227,12 @@ public class GeminiApiService {
                 payload = Map.of(
                     "systemInstruction", systemInstruction,
                     "contents", List.of(userContent),
-                    "generationConfig", Map.of("temperature", 0.2, "maxOutputTokens", 8192)
+                    "generationConfig", Map.of("temperature", 0.2, "maxOutputTokens", 16384)
                 );
             } else {
                 payload = Map.of(
                     "contents", List.of(userContent),
-                    "generationConfig", Map.of("temperature", 0.2, "maxOutputTokens", 8192)
+                    "generationConfig", Map.of("temperature", 0.2, "maxOutputTokens", 16384)
                 );
             }
             return objectMapper.writeValueAsString(payload);
@@ -278,7 +279,8 @@ public class GeminiApiService {
 
     private String buildEmailGenerationPrompt(ProspectContactDto contact,
                                               List<LocalDateTime> schedule,
-                                              String documentCorpus) {
+                                              String documentCorpus,
+                                              String senderName) {
         String corpusSection = (documentCorpus != null && !documentCorpus.isBlank())
                 ? """
 
@@ -323,6 +325,7 @@ public class GeminiApiService {
 
             Generate all 7 emails. Each email should build on the previous. Be concise and personalized.
             Reference specific technologies, projects, or pain points from the briefing context.
+            %s
             """.formatted(
                 corpusSection,
                 nvl(contact.getName()),
@@ -341,7 +344,10 @@ public class GeminiApiService {
                 schedule.size() > 3 ? schedule.get(3).toString() : "",
                 schedule.size() > 4 ? schedule.get(4).toString() : "",
                 schedule.size() > 5 ? schedule.get(5).toString() : "",
-                schedule.size() > 6 ? schedule.get(6).toString() : ""
+                schedule.size() > 6 ? schedule.get(6).toString() : "",
+                (senderName != null && !senderName.isBlank())
+                    ? "Sign every email with:\nRegards,\n" + senderName
+                    : ""
             );
     }
 
@@ -422,7 +428,22 @@ public class GeminiApiService {
     private List<GeneratedEmailDto> parseEmailList(String text, List<LocalDateTime> schedule) {
         try {
             String json = extractJson(text);
-            JsonNode array = parseJsonWithRecovery(json);
+            JsonNode parsed = parseJsonWithRecovery(json);
+
+            // Unwrap object containers: {"emails": [...]} or any object with a single array field
+            JsonNode array = parsed;
+            if (parsed.isObject()) {
+                JsonNode emails = parsed.path("emails");
+                if (emails.isArray()) {
+                    array = emails;
+                } else {
+                    // Try the first array-valued field
+                    for (JsonNode child : parsed) {
+                        if (child.isArray()) { array = child; break; }
+                    }
+                }
+            }
+
             List<GeneratedEmailDto> result = new ArrayList<>();
             for (JsonNode node : array) {
                 GeneratedEmailDto dto = new GeneratedEmailDto();
@@ -435,9 +456,12 @@ public class GeminiApiService {
                 }
                 result.add(dto);
             }
+            if (result.isEmpty()) {
+                throw new RuntimeException("Parsed JSON contained no email objects");
+            }
             return result;
         } catch (Exception e) {
-            log.error("Failed to parse email list from Gemini: {}", text, e);
+            log.error("Failed to parse email list from Gemini response: {}", text, e);
             throw new RuntimeException(
                 "Gemini returned an unexpected format for emails — the response may have been truncated. " +
                 "Try reducing the number of email steps in your Gem instructions.", e);
@@ -469,26 +493,41 @@ public class GeminiApiService {
     }
 
     /**
-     * Strips markdown code fences if Gemini wraps JSON in ```json ... ```.
-     * Also handles truncated responses where the closing fence is missing.
+     * Extracts the JSON payload from a Gemini response that may contain:
+     * - Markdown code fences (```json ... ```)
+     * - Preamble text before the JSON ("Here are the emails:\n[...]")
+     * - Wrapper objects ({"emails": [...]}) instead of bare arrays
+     * - Truncated responses (missing closing fence or bracket)
      */
     private String extractJson(String text) {
         String trimmed = text.trim();
-        if (!trimmed.startsWith("```")) return trimmed;
 
-        // Strip the opening fence line (e.g. "```json\n" or "```\n")
-        int firstNewline = trimmed.indexOf('\n');
-        if (firstNewline < 0) return trimmed; // no content after the fence
-        String afterFence = trimmed.substring(firstNewline + 1);
-
-        // Strip closing fence if present
-        int closingFence = afterFence.lastIndexOf("```");
-        if (closingFence > 0) {
-            return afterFence.substring(0, closingFence).trim();
+        // Strip markdown code fences if present
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+            if (firstNewline >= 0) {
+                String afterFence = trimmed.substring(firstNewline + 1);
+                int closingFence = afterFence.lastIndexOf("```");
+                trimmed = closingFence > 0
+                        ? afterFence.substring(0, closingFence).trim()
+                        : afterFence.trim();
+            }
         }
 
-        // No closing fence (truncated response) — return everything after the opening line
-        return afterFence.trim();
+        // Find the first [ or { — skip any preamble text Gemini may have added
+        int arrayStart  = trimmed.indexOf('[');
+        int objectStart = trimmed.indexOf('{');
+
+        if (arrayStart >= 0 && (objectStart < 0 || arrayStart <= objectStart)) {
+            // Bare array — preferred format
+            return trimmed.substring(arrayStart);
+        }
+        if (objectStart >= 0) {
+            // Object wrapper — return from { so parseJsonWithRecovery can handle it
+            return trimmed.substring(objectStart);
+        }
+
+        return trimmed;
     }
 
     private String nvl(String s) {
