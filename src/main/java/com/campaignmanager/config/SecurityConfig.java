@@ -47,6 +47,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/gems/**").hasRole("ADMIN")
                 // Gemini settings — admin only
                 .requestMatchers("/api/settings/gemini/**").hasRole("ADMIN")
+                // User management (list, reset password) — admin only
+                .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             )

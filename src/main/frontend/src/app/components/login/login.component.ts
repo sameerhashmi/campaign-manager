@@ -63,6 +63,17 @@ import { AuthService } from '../../services/auth.service';
               <span>Don't have an account?</span>
               <button mat-button color="primary" type="button" (click)="switchMode(true)">Create Account</button>
             </div>
+
+            <div class="forgot-row">
+              <button mat-button type="button" class="forgot-btn" (click)="showForgotHint = !showForgotHint">
+                Forgot password?
+              </button>
+              @if (showForgotHint) {
+                <div class="forgot-hint">
+                  Contact your admin to reset your password.
+                </div>
+              }
+            </div>
           } @else {
             <form [formGroup]="registerForm" (ngSubmit)="register()">
               <mat-form-field appearance="outline">
@@ -156,6 +167,22 @@ import { AuthService } from '../../services/auth.service';
       font-size: 13px;
       color: #5f6368;
     }
+    .forgot-row {
+      text-align: center;
+      margin-top: 4px;
+    }
+    .forgot-btn {
+      font-size: 13px;
+      color: #5f6368;
+    }
+    .forgot-hint {
+      margin-top: 4px;
+      padding: 8px 12px;
+      background: #f1f3f4;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #3c4043;
+    }
     mat-spinner { margin: 0 auto; }
   `]
 })
@@ -165,6 +192,7 @@ export class LoginComponent {
   loading = false;
   hidePassword = true;
   isRegisterMode = false;
+  showForgotHint = false;
 
   constructor(
     private fb: FormBuilder,

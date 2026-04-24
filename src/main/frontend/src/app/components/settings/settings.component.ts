@@ -418,6 +418,74 @@ import { switchMap, takeWhile } from 'rxjs/operators';
             </mat-card-actions>
           }
         </mat-card>
+
+        <!-- User Management Card (admin only) -->
+        <mat-card class="settings-card">
+          <mat-card-header>
+            <div mat-card-avatar class="users-avatar">
+              <mat-icon>group</mat-icon>
+            </div>
+            <mat-card-title>User Management</mat-card-title>
+            <mat-card-subtitle>Reset passwords for any user.</mat-card-subtitle>
+          </mat-card-header>
+          <mat-card-content>
+            @if (loadingUsers) {
+              <mat-spinner diameter="28"></mat-spinner>
+            } @else if (users.length === 0) {
+              <div class="empty-state">No users yet.</div>
+            } @else {
+              <table mat-table [dataSource]="users" class="users-table">
+                <ng-container matColumnDef="username">
+                  <th mat-header-cell *matHeaderCellDef>Username</th>
+                  <td mat-cell *matCellDef="let u">{{ u.username }}</td>
+                </ng-container>
+                <ng-container matColumnDef="role">
+                  <th mat-header-cell *matHeaderCellDef>Role</th>
+                  <td mat-cell *matCellDef="let u">
+                    <span class="role-badge" [class.role-admin]="u.role === 'ROLE_ADMIN'">
+                      {{ u.role === 'ROLE_ADMIN' ? 'Admin' : 'User' }}
+                    </span>
+                  </td>
+                </ng-container>
+                <ng-container matColumnDef="actions">
+                  <th mat-header-cell *matHeaderCellDef></th>
+                  <td mat-cell *matCellDef="let u">
+                    <button mat-stroked-button (click)="openResetPassword(u)">
+                      <mat-icon>lock_reset</mat-icon> Reset Password
+                    </button>
+                  </td>
+                </ng-container>
+                <tr mat-header-row *matHeaderRowDef="['username','role','actions']"></tr>
+                <tr mat-row *matRowDef="let row; columns: ['username','role','actions']"></tr>
+              </table>
+            }
+
+            @if (resetTargetUser) {
+              <div class="reset-form">
+                <div class="reset-title">
+                  Reset password for <strong>{{ resetTargetUser.username }}</strong>
+                </div>
+                <mat-form-field appearance="outline" class="reset-input">
+                  <mat-label>New Password</mat-label>
+                  <input matInput type="text" [(ngModel)]="newPasswordValue" autocomplete="off"
+                         placeholder="At least 6 characters">
+                </mat-form-field>
+                <div class="reset-actions">
+                  <button mat-button (click)="cancelResetPassword()" [disabled]="resettingPassword">Cancel</button>
+                  <button mat-raised-button color="primary"
+                          (click)="submitResetPassword()"
+                          [disabled]="resettingPassword || !newPasswordValue || newPasswordValue.length < 6">
+                    @if (resettingPassword) {
+                      <mat-spinner diameter="18"></mat-spinner>
+                    } @else {
+                      Reset Password
+                    }
+                  </button>
+                </div>
+              </div>
+            }
+          </mat-card-content>
+        </mat-card>
         } <!-- end @if (isAdmin) for AI cards -->
 
       </div>
@@ -488,6 +556,25 @@ import { switchMap, takeWhile } from 'rxjs/operators';
       border-radius: 50%; width: 40px; height: 40px;
     }
     .gems-avatar mat-icon { color: white; }
+    .users-avatar {
+      background: #f9ab00; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; width: 40px; height: 40px;
+    }
+    .users-avatar mat-icon { color: white; }
+    .users-table { width: 100%; }
+    .role-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      background: #e8f0fe; color: #1967d2; font-size: 12px; font-weight: 500;
+    }
+    .role-badge.role-admin { background: #fce8e6; color: #c5221f; }
+    .reset-form {
+      margin-top: 16px; padding: 16px; background: #f8f9fa; border-radius: 8px;
+      border: 1px solid #e8eaed;
+    }
+    .reset-title { font-size: 14px; color: #3c4043; margin-bottom: 12px; }
+    .reset-input { width: 100%; max-width: 400px; display: block; }
+    .reset-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .empty-state { color: #5f6368; font-size: 14px; padding: 16px 0; }
     .connected-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
     .connected-icon { color: #34a853; }
     .connected-title { font-weight: 600; font-size: 14px; }
@@ -609,6 +696,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   isAdmin = false;
 
+  // User management
+  users: Array<{ id: number; username: string; role: string }> = [];
+  loadingUsers = false;
+  resetTargetUser: { id: number; username: string; role: string } | null = null;
+  newPasswordValue = '';
+  resettingPassword = false;
+
   constructor(
     private settingsService: SettingsService,
     private gemService: GemService,
@@ -623,6 +717,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if (this.isAdmin) {
       this.loadGeminiStatus();
       this.loadGems();
+      this.loadUsers();
     }
   }
 
@@ -892,6 +987,48 @@ export class SettingsComponent implements OnInit, OnDestroy {
       error: () => {
         this.savingModel = false;
         this.snackBar.open('Failed to save model', 'Close', { duration: 4000 });
+      }
+    });
+  }
+
+  // ─── User Management ──────────────────────────────────────────────────────
+
+  loadUsers(): void {
+    this.loadingUsers = true;
+    this.http.get<Array<{ id: number; username: string; role: string }>>('/api/users').subscribe({
+      next: users => { this.users = users; this.loadingUsers = false; },
+      error: () => { this.loadingUsers = false; }
+    });
+  }
+
+  openResetPassword(user: { id: number; username: string; role: string }): void {
+    this.resetTargetUser = user;
+    this.newPasswordValue = '';
+  }
+
+  cancelResetPassword(): void {
+    this.resetTargetUser = null;
+    this.newPasswordValue = '';
+  }
+
+  submitResetPassword(): void {
+    if (!this.resetTargetUser || this.newPasswordValue.length < 6) return;
+    this.resettingPassword = true;
+    this.http.post<{ message: string }>(
+      `/api/users/${this.resetTargetUser.id}/reset-password`,
+      { newPassword: this.newPasswordValue }
+    ).subscribe({
+      next: res => {
+        this.resettingPassword = false;
+        this.cancelResetPassword();
+        this.snackBar.open(res.message || 'Password reset.', '', {
+          duration: 4000, panelClass: 'snack-success'
+        });
+      },
+      error: err => {
+        this.resettingPassword = false;
+        const msg = err?.error?.message ?? 'Password reset failed.';
+        this.snackBar.open(msg, 'Close', { duration: 5000, panelClass: 'snack-error' });
       }
     });
   }
